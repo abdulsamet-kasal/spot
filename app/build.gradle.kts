@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.spoyt"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.1.1"
         // Keep NewPipe's model classes and the OkHttp/coil dependencies through R8.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

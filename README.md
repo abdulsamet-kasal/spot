@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.1.0` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.1.1` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,8 +15,19 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.1.1 neler değişti?
+
+- **Kritik oynatma düzeltmesi:** ExoPlayer yalnızca medya servisi başladığında oluşturuluyordu.
+  Uygulama açıldıktan sonraki ilk oynatma, motor henüz yokken çalıştığı için sessizce hiçbir şey
+  yapmıyordu. Artık motor uygulama başlangıcında hazırlanıyor ve gerekirse oynatma öncesi
+  yeniden oluşturuluyor.
+- Medya servisi, şarkı başlamadan önce ayağa kaldırılıyor (bildirim/kilit ekranı tutarlı).
+- Uygulama konteyneri (DB, depolar) artık idempotent: activity yeniden oluşturulsa da
+  oynatma denetleyicisi sıfırlanmıyor.
 
 ### 1.1.0 neler değişti?
 
@@ -100,7 +111,7 @@ Hazır APK'yı [Releases](https://github.com/abdulsamet-kasal/spot/releases) say
 telefona kurabilirsiniz (Android 8.0+).
 
 ```powershell
-adb install -r Spoyt-1.1.0.apk
+adb install -r Spoyt-1.1.1.apk
 adb shell am start -n com.example.spoyt/.MainActivity
 ```
 

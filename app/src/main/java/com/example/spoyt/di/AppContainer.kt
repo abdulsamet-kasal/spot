@@ -35,6 +35,9 @@ object AppContainer {
 
     fun init(context: Context) {
         val app = context.applicationContext
+        // Idempotent: the Application and MainActivity both call this, and activity recreation
+        // must not throw away the live controllers.
+        if (appContext === app && database != null) return
         appContext = app
         database = AppDatabase.getInstance(app)
         trackRepository = DefaultTrackRepository(database!!)

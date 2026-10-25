@@ -51,6 +51,7 @@ class PlaybackController(
      */
     suspend fun play(tracks: List<TrackEntity>, startIndex: Int = 0): Boolean {
         if (tracks.isEmpty()) return false
+        ensurePlayer()
         val safeIndex = startIndex.coerceIn(0, tracks.size - 1)
 
         // Make sure everything we are about to play exists locally (liked/playlists/history
@@ -59,6 +60,9 @@ class PlaybackController(
 
         // Show the requested queue immediately; the player asks us for the source if missing.
         PlayerHolder.setQueueSilently(tracks, safeIndex)
+
+        // Bring the media service up first so the notification/session exists when audio starts.
+        AppContainer.startPlaybackService()
 
         val started = prepare(tracks[safeIndex], forceRefresh = false)
         if (started) {
@@ -91,6 +95,7 @@ class PlaybackController(
      * Used for both the "no source yet" and "stream failed" paths.
      */
     private suspend fun loadAndPlay(track: TrackEntity, forceRefresh: Boolean) {
+        ensurePlayer()
         val ok = prepare(track, forceRefresh)
         PlayerHolder.onResolutionFinished(track.videoId)
 
@@ -146,6 +151,17 @@ class PlaybackController(
     private fun recordStart(track: TrackEntity) {
         scope.launch { runCatching { history.addPlay(track.videoId) } }
         AppContainer.startPlaybackService()
+    }
+
+    /**
+     * The ExoPlayer normally comes from [com.example.spoyt.di.SpoytApplication], but the media
+     * service releases it when it is destroyed. Re-create it on demand so playback never
+     * silently no-ops because the engine is missing.
+     */
+    private fun ensurePlayer() {
+        if (!PlayerHolder.isInitialized) {
+            runCatching { PlayerHolder.init(AppContainer.context) }
+        }
     }
 
     /** Toggles the liked flag for [track] and returns the new value. */

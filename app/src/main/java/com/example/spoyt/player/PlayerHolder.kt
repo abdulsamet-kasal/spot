@@ -148,9 +148,6 @@ object PlayerHolder {
     val engine: ExoPlayer
         get() = exoPlayer ?: error("PlayerHolder not initialized. Call init(Context) first.")
 
-    private val player: ExoPlayer
-        get() = exoPlayer ?: error("PlayerHolder not initialized. Call init(Context) first.")
-
     // ---------------------------------------------------------------- sources
 
     /** Register a resolved stream for a track so it can be played. */
@@ -286,6 +283,13 @@ object PlayerHolder {
 
     private fun attachAndPlay(track: TrackEntity) {
         val uri = resolveUri(track.videoId) ?: return
+        // Defensive: if the engine is not available yet, say so instead of throwing.
+        val p = exoPlayer ?: run {
+            _isBuffering.value = false
+            _isPlaying.value = false
+            PlaybackEvents.post("Oynatıcı hazır değil. Tekrar deneyin.")
+            return
+        }
         val stream = streamSources[track.videoId]
         val mediaItem = MediaItem.Builder()
             .setUri(uri)
@@ -299,7 +303,6 @@ object PlayerHolder {
             )
             .build()
 
-        val p = player
         p.setMediaItem(mediaItem, 0)
         p.prepare()
         p.play()
