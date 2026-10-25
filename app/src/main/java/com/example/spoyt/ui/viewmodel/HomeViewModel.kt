@@ -5,9 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.example.spoyt.data.local.entities.PlaylistEntity
 import com.example.spoyt.data.local.entities.TrackEntity
 import com.example.spoyt.di.AppContainer
+import com.example.spoyt.player.PlayerHolder
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
  * Home screen: recently played tracks, liked shortcuts, and the user's playlists.
@@ -41,5 +43,20 @@ class HomeViewModel : ViewModel() {
 
     fun toggleLike(track: TrackEntity) {
         viewModelScope.toggleLike(track)
+    }
+
+    fun download(track: TrackEntity) {
+        viewModelScope.enqueueDownload(track)
+    }
+
+    fun addToQueue(track: TrackEntity) {
+        viewModelScope.launch {
+            runCatching {
+                if (!AppContainer.tracks.trackExists(track.videoId)) {
+                    AppContainer.tracks.saveTrack(track)
+                }
+                PlayerHolder.addToQueue(listOf(track))
+            }
+        }
     }
 }

@@ -6,6 +6,7 @@ import com.example.spoyt.data.local.entities.PlaylistEntity
 import com.example.spoyt.data.local.entities.TrackEntity
 import com.example.spoyt.di.AppContainer
 import com.example.spoyt.download.Downloads
+import com.example.spoyt.player.PlayerHolder
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -101,6 +102,13 @@ class PlaylistDetailViewModel : ViewModel() {
 
     fun download(track: TrackEntity) {
         viewModelScope.enqueueDownload(track)
+    }
+
+    /** Plays the track right after the current one without touching the rest of the queue. */
+    fun addToQueue(track: TrackEntity) {
+        viewModelScope.launch {
+            runCatching { PlayerHolder.addToQueue(listOf(track)) }
+        }
     }
 
     /** Adds an already-known track to this playlist (used by the "add to playlist" menu). */

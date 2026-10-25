@@ -28,13 +28,17 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,7 +68,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.spoyt.R
 import com.example.spoyt.data.local.entities.TrackEntity
+import com.example.spoyt.ui.components.AddToPlaylistDialog
 import com.example.spoyt.ui.components.SpoytBackground
+import com.example.spoyt.ui.components.Thumbnails
 import com.example.spoyt.ui.theme.SpoytGreen
 import com.example.spoyt.ui.theme.SpoytViolet
 import com.example.spoyt.ui.viewmodel.PlayerUiState
@@ -84,6 +90,7 @@ fun PlayerScreen(
     val likedIds by viewModel.likedIds.collectAsStateWithLifecycle()
     val track = state.track
     var queueSheetOpen by remember { mutableStateOf(false) }
+    var addToPlaylistVideoId by remember { mutableStateOf<String?>(null) }
 
     SpoytBackground(
         accent = if (state.isPlaying) SpoytGreen else SpoytViolet
@@ -120,7 +127,14 @@ fun PlayerScreen(
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        PlayerTopBar(onBack = onBack, onDownload = { viewModel.download(track) })
+                        PlayerTopBar(
+                            onBack = onBack,
+                            liked = liked,
+                            onLikeToggle = { viewModel.toggleLike(track) },
+                            onDownload = { viewModel.download(track) },
+                            onPlayNext = { viewModel.addToQueue(track) },
+                            onAddToPlaylist = { addToPlaylistVideoId = track.videoId }
+                        )
                         ArtworkBlock(track = track, modifier = Modifier.fillMaxWidth(0.88f))
                     }
 
@@ -151,6 +165,7 @@ fun PlayerScreen(
                         ActionRow(
                             liked = liked,
                             onLikeToggle = { viewModel.toggleLike(track) },
+                            onAddToPlaylist = { addToPlaylistVideoId = track.videoId },
                             onDownload = { viewModel.download(track) },
                             onOpenQueue = { queueSheetOpen = true }
                         )
@@ -167,7 +182,16 @@ fun PlayerScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 28.dp)
                 ) {
-                    item { PlayerTopBar(onBack = onBack, onDownload = { viewModel.download(track) }) }
+                    item {
+                        PlayerTopBar(
+                            onBack = onBack,
+                            liked = liked,
+                            onLikeToggle = { viewModel.toggleLike(track) },
+                            onDownload = { viewModel.download(track) },
+                            onPlayNext = { viewModel.addToQueue(track) },
+                            onAddToPlaylist = { addToPlaylistVideoId = track.videoId }
+                        )
+                    }
                     item { ArtworkBlock(track = track) }
                     item {
                         TitleBlock(
@@ -196,6 +220,7 @@ fun PlayerScreen(
                         ActionRow(
                             liked = liked,
                             onLikeToggle = { viewModel.toggleLike(track) },
+                            onAddToPlaylist = { addToPlaylistVideoId = track.videoId },
                             onDownload = { viewModel.download(track) },
                             onOpenQueue = { queueSheetOpen = true }
                         )
@@ -233,10 +258,26 @@ fun PlayerScreen(
             }
         }
     }
+
+    addToPlaylistVideoId?.let { videoId ->
+        AddToPlaylistDialog(
+            videoId = videoId,
+            onDismiss = { addToPlaylistVideoId = null }
+        )
+    }
 }
 
 @Composable
-private fun PlayerTopBar(onBack: () -> Unit, onDownload: () -> Unit) {
+private fun PlayerTopBar(
+    onBack: () -> Unit,
+    liked: Boolean,
+    onLikeToggle: () -> Unit,
+    onDownload: () -> Unit,
+    onPlayNext: () -> Unit,
+    onAddToPlaylist: () -> Unit
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -258,19 +299,60 @@ private fun PlayerTopBar(onBack: () -> Unit, onDownload: () -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier.weight(1f)
         )
-        IconButton(onClick = onDownload) {
-            Icon(
-                imageVector = Icons.Default.Download,
-                contentDescription = stringResource(R.string.menu_download),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
-            )
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = stringResource(R.string.action_more),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                PlayerMenuItem(
+                    text = stringResource(if (liked) R.string.menu_unlike else R.string.menu_like),
+                    icon = if (liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder
+                ) { menuOpen = false; onLikeToggle() }
+                PlayerMenuItem(
+                    text = stringResource(R.string.menu_play_next),
+                    icon = Icons.Default.QueueMusic
+                ) { menuOpen = false; onPlayNext() }
+                PlayerMenuItem(
+                    text = stringResource(R.string.menu_add_playlist),
+                    icon = Icons.Default.PlaylistAdd
+                ) { menuOpen = false; onAddToPlaylist() }
+                PlayerMenuItem(
+                    text = stringResource(R.string.menu_download),
+                    icon = Icons.Default.Download
+                ) { menuOpen = false; onDownload() }
+            }
         }
     }
 }
 
 @Composable
+private fun PlayerMenuItem(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    DropdownMenuItem(
+        text = { Text(text, style = MaterialTheme.typography.bodyLarge) },
+        leadingIcon = {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+        },
+        onClick = onClick
+    )
+}
+
+@Composable
 private fun ArtworkBlock(track: TrackEntity, modifier: Modifier = Modifier) {
+    val originalUrl = track.thumbnailUrl
+    val highRes = remember(originalUrl) { Thumbnails.high(originalUrl) }
+    val mediumRes = remember(originalUrl) { Thumbnails.medium(originalUrl) }
+    var highResFailed by remember(originalUrl) { mutableStateOf(false) }
+    val model = if (highResFailed) mediumRes else highRes
+
     Box(
         modifier = modifier
             .padding(horizontal = 28.dp, vertical = 12.dp)
@@ -287,11 +369,13 @@ private fun ArtworkBlock(track: TrackEntity, modifier: Modifier = Modifier) {
             ),
         contentAlignment = Alignment.Center
     ) {
-        if (!track.thumbnailUrl.isNullOrBlank()) {
+        if (!model.isNullOrBlank()) {
             AsyncImage(
-                model = track.thumbnailUrl,
+                model = model,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                // maxresdefault.jpg does not exist for every video; fall back to hqdefault.
+                onError = { if (!highResFailed) highResFailed = true },
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -452,18 +536,19 @@ private fun Controls(
     }
 }
 
-/** Secondary actions: like, download and the queue sheet. */
+/** Secondary actions: like, add to playlist, download and the queue sheet. */
 @Composable
 private fun ActionRow(
     liked: Boolean,
     onLikeToggle: () -> Unit,
+    onAddToPlaylist: () -> Unit,
     onDownload: () -> Unit,
     onOpenQueue: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 28.dp, vertical = 8.dp),
+            .padding(horizontal = 15.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -473,6 +558,11 @@ private fun ActionRow(
             tint = if (liked) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.onSurfaceVariant,
             onClick = onLikeToggle
+        )
+        SecondaryAction(
+            icon = Icons.Default.PlaylistAdd,
+            label = stringResource(R.string.menu_add_playlist),
+            onClick = onAddToPlaylist
         )
         SecondaryAction(
             icon = Icons.Default.Download,

@@ -9,7 +9,9 @@ import com.example.spoyt.di.AppContainer
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -45,6 +47,13 @@ class PlaybackController(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + crashGuard)
 
+    /** Background job that warms up the stream URLs of the upcoming tracks. */
+    private var prefetchJob: Job? = null
+
+    /** videoIds currently being prefetched, so two prefetches never resolve the same track. */
+    private val prefetching: MutableSet<String> =
+        java.util.Collections.synchronizedSet(mutableSetOf())
+
     init {
         // Lazily resolve whatever track became current (next/previous/tap in queue).
         PlayerHolder.onSourceMissing = { track ->
@@ -76,6 +85,9 @@ class PlaybackController(
 
         // Show the requested queue immediately; the player asks us for the source if missing.
         PlayerHolder.setQueueSilently(tracks, safeIndex)
+        // Silence the outgoing track right away: while the new URL resolves the old song must
+        // not keep playing (that used to look like a 4-5 second delay on every track change).
+        PlayerHolder.beginLoading()
 
         // Bring the media service up first so the notification/session exists when audio starts.
         AppContainer.startPlaybackService()
@@ -85,6 +97,7 @@ class PlaybackController(
             PlayerHolder.start()
             PlayerHolder.onResolutionFinished(tracks[safeIndex].videoId)
             recordStart(tracks[safeIndex])
+            prefetchUpcoming(safeIndex)
             return true
         }
 
@@ -95,10 +108,12 @@ class PlaybackController(
                 PlayerHolder.playIndex(index)
                 PlayerHolder.onResolutionFinished(tracks[index].videoId)
                 recordStart(tracks[index])
+                prefetchUpcoming(index)
                 return true
             }
         }
 
+        PlayerHolder.clearLoading()
         PlaybackEvents.post("Bu şarkı şu anda oynatılamıyor. Başka bir şarkı deneyin.")
         return false
     }
@@ -116,6 +131,9 @@ class PlaybackController(
         PlayerHolder.onResolutionFinished(track.videoId)
 
         if (!ok) {
+            if (PlayerHolder.currentTrackState.value?.videoId == track.videoId) {
+                PlayerHolder.clearLoading()
+            }
             PlaybackEvents.post("Bu şarkı şu anda oynatılamıyor. Başka bir şarkı deneyin.")
             return
         }
@@ -125,6 +143,35 @@ class PlaybackController(
         if (current?.videoId == track.videoId) {
             PlayerHolder.reloadCurrent()
             recordStart(track)
+            prefetchUpcoming(PlayerHolder.currentIndexState.value)
+        }
+    }
+
+    /**
+     * Warms up the URL of the next couple of tracks while the current one plays.
+     *
+     * Stream resolution is a network round-trip (NewPipe parses the watch page), so doing it
+     * only when the user hits "next" made every skip feel slow. Resolving ahead in the
+     * background turns skips into an instant swap; failures are ignored because the normal
+     * on-demand path still runs later.
+     */
+    private fun prefetchUpcoming(fromIndex: Int) {
+        val queue = PlayerHolder.queueState.value
+        if (queue.isEmpty()) return
+        prefetchJob?.cancel()
+        prefetchJob = scope.launch {
+            val lastIndex = minOf(queue.lastIndex, fromIndex + PREFETCH_TRACKS)
+            for (index in (fromIndex + 1)..lastIndex) {
+                if (!isActive) return@launch
+                val track = queue.getOrNull(index) ?: continue
+                if (PlayerHolder.streamFor(track.videoId) != null) continue
+                if (!prefetching.add(track.videoId)) continue
+                try {
+                    prepare(track, forceRefresh = false)
+                } finally {
+                    prefetching.remove(track.videoId)
+                }
+            }
         }
     }
 
@@ -202,5 +249,8 @@ class PlaybackController(
     companion object {
         /** How many following tracks to try when the selected one cannot be resolved. */
         private const val MAX_FALLBACK_TRACKS = 3
+
+        /** How many upcoming tracks to resolve in the background while one plays. */
+        private const val PREFETCH_TRACKS = 2
     }
 }

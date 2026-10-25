@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.1.1` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.3.0` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,10 +15,27 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.3.0` | Oynatıcıda çalma listesine ekleme, her şarkı satırında üç nokta menüsü, net kapak görselleri, anında şarkı geçişi, alt gezinme düzeltmesi |
 | `1.2.0` | Oynatma çökmesi giderildi, durum senkronizasyonu düzeltildi, hamburger menü + responsive arayüz |
 | `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.3.0 neler değişti?
+
+- **Oynatıcıda çalma listesine ekleme:** oynatıcının sağ üstündeki üç nokta menüsünden ve
+  ikincil işlem satırındaki yeni "Listeye ekle" düğmesinden çalma listesi seçilebiliyor.
+- **Üç nokta menüsü her yerde:** ana ekran (son çalınanlar), beğenilenler, indirilenler,
+  çalma listesi ve oynatıcı satırları artık aynı menüyü sunuyor — beğen, sonraya ekle, indir,
+  çalma listesine ekle, listeden kaldır.
+- **Net kapak görselleri:** büyük oynatıcı ve ana ekran kapakları artık küçük `mqdefault`
+  yerine `maxresdefault`/`hqdefault` varyantını istiyor; YouTube'da yüksek çözünürlük yoksa
+  otomatik olarak bir alt boyuta düşülüyor. Piksellenme giderildi.
+- **Anında şarkı geçişi:** yeni şarkının akış adresi çözülene kadar eski şarkı çalmaya devam
+  ediyordu. Artık geçişte eski ses hemen susuyor, tampon göstergesi görünüyor ve sıradaki iki
+  şarkının adresi arka planda önceden çözülüyor; "sonraki" geçişleri beklemesiz çalışıyor.
+- **Alt gezinme düzeltmesi:** Ayarlar (ve çalma listesi) ekranındayken alt gezinme düğmeleri
+  tepki vermiyordu. Sekme geçişi artık yığını her zaman ana ekrandan yeniden kuruyor.
 
 ### 1.2.0 neler değişti?
 

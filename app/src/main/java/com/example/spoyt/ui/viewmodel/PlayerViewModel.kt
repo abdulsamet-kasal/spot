@@ -92,6 +92,11 @@ class PlayerViewModel : ViewModel() {
 
     fun playAt(index: Int) = PlayerHolder.playIndex(index)
 
+    /** Queues the given track after the current one (no queue replacement). */
+    fun addToQueue(track: TrackEntity) {
+        PlayerHolder.addToQueue(listOf(track))
+    }
+
     fun download(track: TrackEntity) {
         viewModelScope.enqueueDownload(track)
     }

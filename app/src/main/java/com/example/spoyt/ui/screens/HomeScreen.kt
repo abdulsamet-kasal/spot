@@ -38,6 +38,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,9 +56,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.spoyt.R
 import com.example.spoyt.data.local.entities.TrackEntity
+import com.example.spoyt.ui.components.AddToPlaylistDialog
 import com.example.spoyt.ui.components.EmptyState
 import com.example.spoyt.ui.components.SectionHeader
 import com.example.spoyt.ui.components.SpoytBackground
+import com.example.spoyt.ui.components.Thumbnails
 import com.example.spoyt.ui.components.TrackRow
 import com.example.spoyt.ui.theme.SpoytGreen
 import com.example.spoyt.ui.theme.SpoytViolet
@@ -80,6 +85,7 @@ fun HomeScreen(
     val recent by viewModel.recentTracks.collectAsStateWithLifecycle()
     val liked by viewModel.likedTracks.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    var addToPlaylistVideoId by remember { mutableStateOf<String?>(null) }
 
     SpoytBackground {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -157,7 +163,10 @@ fun HomeScreen(
                                 onOpenPlayer()
                             },
                             isLiked = liked.any { it.videoId == track.videoId },
-                            onLikeToggle = { viewModel.toggleLike(track) }
+                            onLikeToggle = { viewModel.toggleLike(track) },
+                            onDownload = { viewModel.download(track) },
+                            onPlayNext = { viewModel.addToQueue(track) },
+                            onAddToPlaylist = { addToPlaylistVideoId = track.videoId }
                         )
                     }
                 } else {
@@ -170,6 +179,13 @@ fun HomeScreen(
                     }
                 }
             }
+        }
+
+        addToPlaylistVideoId?.let { videoId ->
+            AddToPlaylistDialog(
+                videoId = videoId,
+                onDismiss = { addToPlaylistVideoId = null }
+            )
         }
     }
 }
@@ -245,6 +261,8 @@ private fun HeroCard(
     onShuffle: () -> Unit,
     onOpenLiked: () -> Unit
 ) {
+    val artwork = remember(track.thumbnailUrl) { Thumbnails.high(track.thumbnailUrl) }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -257,9 +275,9 @@ private fun HeroCard(
                 )
             )
     ) {
-        if (!track.thumbnailUrl.isNullOrBlank()) {
+        if (!artwork.isNullOrBlank()) {
             AsyncImage(
-                model = track.thumbnailUrl,
+                model = artwork,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 alpha = 0.32f,
@@ -353,6 +371,7 @@ private fun RecentCarousel(tracks: List<TrackEntity>, onPlay: (Int) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         itemsIndexed(tracks) { index, track ->
+            val artwork = remember(track.thumbnailUrl) { Thumbnails.medium(track.thumbnailUrl) }
             Column(
                 modifier = Modifier
                     .width(132.dp)
@@ -368,9 +387,9 @@ private fun RecentCarousel(tracks: List<TrackEntity>, onPlay: (Int) -> Unit) {
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (!track.thumbnailUrl.isNullOrBlank()) {
+                    if (!artwork.isNullOrBlank()) {
                         AsyncImage(
-                            model = track.thumbnailUrl,
+                            model = artwork,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()

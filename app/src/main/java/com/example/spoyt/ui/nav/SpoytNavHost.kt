@@ -29,9 +29,8 @@ fun SpoytNavHost(
                 onOpenPlayer = { navController.navigate(Screen.Player.route) },
                 onOpenLibrary = {
                     navController.navigate(Screen.Library.route) {
-                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        popUpTo(Screen.Home.route)
                         launchSingleTop = true
-                        restoreState = true
                     }
                 },
                 onOpenDrawer = onOpenDrawer

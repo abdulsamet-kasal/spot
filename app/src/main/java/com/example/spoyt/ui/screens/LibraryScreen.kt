@@ -54,6 +54,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.spoyt.R
 import com.example.spoyt.data.local.entities.TrackEntity
 import com.example.spoyt.download.Downloads
+import com.example.spoyt.ui.components.AddToPlaylistDialog
 import com.example.spoyt.ui.components.EmptyState
 import com.example.spoyt.ui.components.SpoytBackground
 import com.example.spoyt.ui.components.TrackRow
@@ -77,6 +78,7 @@ fun LibraryScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var newPlaylistName by remember { mutableStateOf("") }
+    var addToPlaylistVideoId by remember { mutableStateOf<String?>(null) }
 
     SpoytBackground {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -122,10 +124,17 @@ fun LibraryScreen(
 
             Crossfade(targetState = selectedTab, label = "library-tab") { tab ->
                 when (tab) {
-                    0 -> LikedTab(liked, onPlay = { index ->
-                        viewModel.play(liked, index)
-                        onOpenPlayer()
-                    }, onLikeToggle = viewModel::toggleLike)
+                    0 -> LikedTab(
+                        liked = liked,
+                        onPlay = { index ->
+                            viewModel.play(liked, index)
+                            onOpenPlayer()
+                        },
+                        onLikeToggle = viewModel::toggleLike,
+                        onDownload = viewModel::download,
+                        onPlayNext = viewModel::addToQueue,
+                        onAddToPlaylist = { addToPlaylistVideoId = it }
+                    )
 
                     1 -> DownloadsTab(
                         downloads = downloads,
@@ -137,7 +146,9 @@ fun LibraryScreen(
                             onOpenPlayer()
                         },
                         onLikeToggle = viewModel::toggleLike,
-                        onDelete = viewModel::deleteDownload
+                        onDelete = viewModel::deleteDownload,
+                        onPlayNext = viewModel::addToQueue,
+                        onAddToPlaylist = { addToPlaylistVideoId = it }
                     )
 
                     else -> PlaylistsTab(
@@ -180,6 +191,13 @@ fun LibraryScreen(
                     Text(stringResource(R.string.action_cancel))
                 }
             }
+        )
+    }
+
+    addToPlaylistVideoId?.let { videoId ->
+        AddToPlaylistDialog(
+            videoId = videoId,
+            onDismiss = { addToPlaylistVideoId = null }
         )
     }
 }
@@ -226,7 +244,10 @@ private fun SegmentedTabs(selected: Int, onSelect: (Int) -> Unit, labels: List<S
 private fun LikedTab(
     liked: List<TrackEntity>,
     onPlay: (Int) -> Unit,
-    onLikeToggle: (TrackEntity) -> Unit
+    onLikeToggle: (TrackEntity) -> Unit,
+    onDownload: (TrackEntity) -> Unit,
+    onPlayNext: (TrackEntity) -> Unit,
+    onAddToPlaylist: (String) -> Unit
 ) {
     if (liked.isEmpty()) {
         EmptyState(
@@ -246,7 +267,10 @@ private fun LikedTab(
                 modifier = Modifier.padding(horizontal = 10.dp),
                 onClick = { onPlay(index) },
                 isLiked = true,
-                onLikeToggle = { onLikeToggle(track) }
+                onLikeToggle = { onLikeToggle(track) },
+                onDownload = { onDownload(track) },
+                onPlayNext = { onPlayNext(track) },
+                onAddToPlaylist = { onAddToPlaylist(track.videoId) }
             )
         }
     }
@@ -260,7 +284,9 @@ private fun DownloadsTab(
     likedIds: Set<String>,
     onPlay: (TrackEntity) -> Unit,
     onLikeToggle: (TrackEntity) -> Unit,
-    onDelete: (String) -> Unit
+    onDelete: (String) -> Unit,
+    onPlayNext: (TrackEntity) -> Unit,
+    onAddToPlaylist: (String) -> Unit
 ) {
     if (downloads.isEmpty()) {
         EmptyState(
@@ -292,6 +318,8 @@ private fun DownloadsTab(
                 downloadState = download.state,
                 downloadProgress = progress[download.videoId],
                 onLikeToggle = { onLikeToggle(track) },
+                onPlayNext = { onPlayNext(track) },
+                onAddToPlaylist = { onAddToPlaylist(track.videoId) },
                 onRemove = { onDelete(download.videoId) }
             )
         }

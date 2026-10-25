@@ -292,6 +292,26 @@ object PlayerHolder {
         runOnMain { exoPlayer?.seekTo(positionMs) }
     }
 
+    /**
+     * Immediate feedback when the user picks another track.
+     *
+     * Resolving a fresh stream URL takes a moment; without this the outgoing song keeps
+     * playing in the meantime, which feels like the app "changed the title but not the song".
+     * Pausing here (and showing the buffering spinner) makes the switch feel instant.
+     */
+    fun beginLoading() {
+        runOnMain {
+            _isBuffering.value = true
+            _isPlaying.value = false
+            runCatching { exoPlayer?.pause() }
+        }
+    }
+
+    /** Drops the loading spinner when the requested track turned out to be unplayable. */
+    fun clearLoading() {
+        runOnMain { _isBuffering.value = false }
+    }
+
     /** Start (or restart) the currently selected track using an already-known source. */
     fun start() {
         val track = _currentTrack.value ?: return

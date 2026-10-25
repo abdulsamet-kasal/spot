@@ -7,6 +7,7 @@ import com.example.spoyt.data.local.entities.PlaylistEntity
 import com.example.spoyt.data.local.entities.TrackEntity
 import com.example.spoyt.di.AppContainer
 import com.example.spoyt.download.Downloads
+import com.example.spoyt.player.PlayerHolder
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -59,6 +60,23 @@ class LibraryViewModel : ViewModel() {
 
     fun deleteDownload(videoId: String) {
         Downloads.delete(AppContainer.context, videoId)
+    }
+
+    /** Starts an offline download for a track the user picked from a library row. */
+    fun download(track: TrackEntity) {
+        viewModelScope.enqueueDownload(track)
+    }
+
+    /** Plays the track right after the current one without touching the rest of the queue. */
+    fun addToQueue(track: TrackEntity) {
+        viewModelScope.launch {
+            runCatching {
+                if (!AppContainer.tracks.trackExists(track.videoId)) {
+                    AppContainer.tracks.saveTrack(track)
+                }
+                PlayerHolder.addToQueue(listOf(track))
+            }
+        }
     }
 
     fun playDownloaded(videoId: String) {

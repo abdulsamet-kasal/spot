@@ -85,9 +85,12 @@ private fun SpoytApp() {
 
     fun navigateTo(screen: Screen) {
         navController.navigate(screen.route) {
-            popUpTo(navController.graph.startDestinationId) { saveState = true }
+            // Rebuild the stack from Home on every tab switch. The previous
+            // saveState/restoreState pair could restore a screen that had just been popped
+            // (Settings, a playlist), so tapping a bottom bar item from Settings appeared to
+            // do nothing.
+            popUpTo(Screen.Home.route) { inclusive = screen.route == Screen.Home.route }
             launchSingleTop = true
-            restoreState = true
         }
     }
 

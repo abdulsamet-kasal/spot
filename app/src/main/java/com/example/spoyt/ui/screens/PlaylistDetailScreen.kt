@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.spoyt.R
+import com.example.spoyt.ui.components.AddToPlaylistDialog
 import com.example.spoyt.ui.components.EmptyState
 import com.example.spoyt.ui.components.SpoytBackground
 import com.example.spoyt.ui.components.TrackRow
@@ -73,6 +74,7 @@ fun PlaylistDetailScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var renameValue by remember { mutableStateOf("") }
+    var addToPlaylistVideoId by remember { mutableStateOf<String?>(null) }
 
     SpoytBackground(accent = SpoytViolet) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -166,6 +168,8 @@ fun PlaylistDetailScreen(
                             isLiked = likedIds.contains(track.videoId),
                             onLikeToggle = { viewModel.toggleLike(track) },
                             onDownload = { viewModel.download(track) },
+                            onPlayNext = { viewModel.addToQueue(track) },
+                            onAddToPlaylist = { addToPlaylistVideoId = track.videoId },
                             onRemove = { viewModel.removeTrack(track.videoId) }
                         )
                     }
@@ -228,6 +232,13 @@ fun PlaylistDetailScreen(
                     Text(stringResource(R.string.action_cancel))
                 }
             }
+        )
+    }
+
+    addToPlaylistVideoId?.let { videoId ->
+        AddToPlaylistDialog(
+            videoId = videoId,
+            onDismiss = { addToPlaylistVideoId = null }
         )
     }
 }
