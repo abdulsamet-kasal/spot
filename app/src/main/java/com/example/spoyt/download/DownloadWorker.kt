@@ -50,7 +50,7 @@ class DownloadWorker(
 
             val request = Request.Builder()
                 .url(stream.url)
-                .header("User-Agent", PlayerHolder.HTTP_USER_AGENT)
+                .header("User-Agent", PlayerHolder.userAgentFor(stream.url))
                 .header("Accept", "*/*")
                 .build()
 

@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.4.1` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.4.2` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,6 +15,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.4.2` | Erken bitişin asıl kaynağı giderildi: akış/indirme isteklerinde URL'nin istemcisine uygun User-Agent (Android/iOS YouTube istemcisi akışları artık tarayıcı kimliğiyle indirilmiyor), NewPipe isteğinin kendi UA'sı ezilmiyor |
 | `1.4.1` | Yayın kararlılığı: kesilen akışta otomatik kurtarma (kaldığı yerden devam), bozuk URL'de manuel oynatmayla taze çözümleme, kilit ekranı medya kartı (önceki/duraklat/sonraki), aramada 60 sonuca kadar sayfalama |
 | `1.4.0` | Tekrar/oynatma hızı/uyku zamanlayıcısı, kuyruk düzenleme, radyo, sözler (LRCLIB), arama geçmişi, bağlantıdan oynatma, Geçmiş sekmesi, yedekle/geri yükle, Wi-Fi kısıtı, ana ekran widget'ı, uygulama kısayolları, güncelleme kontrolü, R8 + KSP + testler + CI |
 | `1.3.0` | Oynatıcıda çalma listesine ekleme, her şarkı satırında üç nokta menüsü, net kapak görselleri, anında şarkı geçişi, alt gezinme düzeltmesi |
@@ -22,6 +23,17 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 | `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.4.2 neler değişti?
+
+- **Erken bitişin asıl nedeni giderildi:** YouTube akış URL'leri artık bir "istemciye"
+  (Android/iOS YouTube uygulaması) ait olarak üretiliyor; bu URL'ler o istemcinin
+  User-Agent'ı ile istenmediğinde CDN yalnızca ~1 dakikalık kırpılmış veri sunuyordu.
+  Oynatma ve indirme istekleri artık URL'deki istemciye göre doğru User-Agent'ı
+  kullanır (`c=ANDROID` → Android uygulaması, `c=IOS` → iOS uygulaması, aksi halde
+  tarayıcı). NewPipe kitaplığının kendi istemci UA'sı da artık ezilmiyor.
+- İndirilen dosyalarda da aynı düzeltme geçerli: indirmeler tam boyutta tamamlandığından
+  çevrimdışı çalma bundan böyle etkilenmez.
 
 ### 1.4.1 neler değişti?
 

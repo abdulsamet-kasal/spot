@@ -34,15 +34,22 @@ class NewPipeDownloader : Downloader() {
             okRequest.method(method, null)
         }
 
-        // Apply headers from NewPipe's request (e.g. Accept-Language).
+        // Apply headers from NewPipe's request (e.g. Accept-Language, cookies, and the
+        // client-specific User-Agent of the player client being used). `.header()` replaces
+        // so no duplicate User-Agent headers can end up on the wire.
         request.headers().forEach { (name, values) ->
             values.forEach { value ->
-                okRequest.addHeader(name, value)
+                okRequest.header(name, value)
             }
         }
 
-        // Standard browser-like User-Agent.
-        okRequest.addHeader("User-Agent", BROWSER_USER_AGENT)
+        // Fall back to a standard browser-like User-Agent only when NewPipe did not set
+        // one: the extractor sends the YouTube-app user agent for its Android/iOS player
+        // clients, and overriding it makes those requests fail (streams get cut short).
+        val hasUserAgent = request.headers().keys.any { it.equals("User-Agent", ignoreCase = true) }
+        if (!hasUserAgent) {
+            okRequest.header("User-Agent", BROWSER_USER_AGENT)
+        }
 
         return try {
             val response = client.newCall(okRequest.build()).execute()
