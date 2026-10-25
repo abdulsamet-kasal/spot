@@ -63,14 +63,36 @@ class YoutubeSource {
 
     /**
      * Searches YouTube Music for songs matching [query].
-     * Returns an empty list on any network or extraction error (never throws).
+     * The first page holds ~20 items, so up to two extra pages are fetched to make the
+     * list feel full. Returns whatever could be collected on any network/extraction
+     * error (never throws).
      */
     fun search(query: String): List<SearchResult> {
         if (query.isBlank()) return emptyList()
         return try {
             val extractor = service().getSearchExtractor(query, listOf(MUSIC_SONGS_FILTER), "")
             extractor.fetchPage()
-            extractor.initialPage.items.mapNotNull { toSearchResult(it) }
+
+            val results = mutableListOf<SearchResult>()
+            val seen = HashSet<String>()
+            fun addPage(items: List<org.schabi.newpipe.extractor.InfoItem>) {
+                items.forEach { item ->
+                    toSearchResult(item)?.let { if (seen.add(it.videoId)) results.add(it) }
+                }
+            }
+            addPage(extractor.initialPage.items)
+
+            // Pull extra pages up to the cap; a failing page just stops pagination.
+            var page = extractor.initialPage.nextPage
+            var pagesFetched = 0
+            while (page != null && pagesFetched < SEARCH_EXTRA_PAGES && results.size < SEARCH_RESULT_LIMIT) {
+                pagesFetched++
+                val nextPage = runCatching { extractor.getPage(page) }.getOrNull() ?: break
+                addPage(nextPage.items)
+                page = if (nextPage.hasNextPage()) nextPage.nextPage else null
+            }
+
+            results.take(SEARCH_RESULT_LIMIT)
         } catch (e: Exception) {
             // Network/extraction failures must not crash the app.
             emptyList()
@@ -125,6 +147,10 @@ class YoutubeSource {
 
             val playable = extractor.audioStreams
                 .filter { stream -> isPlayable(stream) }
+                // URLs carrying a "range=" parameter serve only that byte range (~1 minute
+                // of audio) and then "end" prematurely; full-file URLs are always preferable.
+                .filter { stream -> !stream.content.contains("range=") }
+                .ifEmpty { extractor.audioStreams.filter { stream -> isPlayable(stream) } }
 
             // Prefer a well-supported container (m4a/AAC) at the highest bitrate; fall back
             // to any playable audio stream (Opus/WebM) when only those exist.
@@ -203,5 +229,11 @@ class YoutubeSource {
          * Any filter starting with "music_" enables YoutubeMusicSearchExtractor.
          */
         private const val MUSIC_SONGS_FILTER = "music_songs"
+
+        /** How many search pages beyond the first to fetch (each holds ~20 songs). */
+        private const val SEARCH_EXTRA_PAGES = 2
+
+        /** Upper bound of search results shown for one query. */
+        const val SEARCH_RESULT_LIMIT = 60
     }
 }

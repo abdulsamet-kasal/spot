@@ -95,6 +95,13 @@ object PlayerHolder {
     private val retried: MutableSet<String> =
         java.util.Collections.synchronizedSet(mutableSetOf())
 
+    /**
+     * Position (ms) to resume from after a mid-stream failure. Set by the error handler,
+     * consumed by [attachAndPlay]: re-resolving the URL must not restart the song from
+     * the beginning when the CDN dropped us halfway through.
+     */
+    private var resumePositionMs = 0L
+
     /** Current playback position in milliseconds (read synchronously for the seek bar). */
     val positionMs: Long
         get() = exoPlayer?.currentPosition ?: 0L
@@ -123,7 +130,21 @@ object PlayerHolder {
             val dataSourceFactory = DefaultDataSource.Factory(context, httpFactory)
             val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
 
-            val p = ExoPlayer.Builder(context, mediaSourceFactory).build()
+            // A generous audio buffer: mobile networks stall briefly, and a bigger buffer
+            // rides those out instead of stopping playback.
+            val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    /* minBufferMs = */ 30_000,
+                    /* maxBufferMs = */ 120_000,
+                    /* bufferForPlaybackMs = */ 2_500,
+                    /* bufferForPlaybackAfterRebufferMs = */ 5_000
+                )
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build()
+
+            val p = ExoPlayer.Builder(context, mediaSourceFactory)
+                .setLoadControl(loadControl)
+                .build()
 
             // Music audio focus: pause when another app takes audio, duck on interruptions.
             p.setAudioAttributes(
@@ -154,13 +175,31 @@ object PlayerHolder {
                             _currentTrack.value?.let { retried.remove(it.videoId) }
                         }
 
-                        Player.STATE_ENDED -> playNext()
+                        Player.STATE_ENDED -> {
+                            // YouTube sometimes serves truncated audio: the stream "ends"
+                            // while the real track still has minutes left. Detect that and
+                            // restart with a fresh URL instead of skipping to the next song.
+                            if (endedPrematurely()) recoverFromPrematureEnd() else playNext()
+                        }
                     }
                 }
+
                 override fun onPlayerError(error: PlaybackException) {
                     _isPlaying.value = false
                     _isBuffering.value = false
+                    val p = exoPlayer
                     val track = _currentTrack.value ?: return
+                    val duration = p?.duration?.takeIf { it > 0 } ?: 0L
+                    val position = p?.currentPosition ?: 0L
+                    // An error at the very end of the track is effectively "finished":
+                    // advance instead of wasting a retry on the last second.
+                    if (duration > 0 && position >= duration - 1_500) {
+                        playNext()
+                        return
+                    }
+                    // Resume from where the CDN dropped us (anything past the intro);
+                    // restart from zero when the failure came immediately.
+                    resumePositionMs = if (position > 3_000) position else 0L
                     // Expired googlevideo URLs and transient CDN errors are worth one retry:
                     // the controller re-resolves the stream and calls reloadCurrent().
                     val canRetry = onPlaybackFailed != null && retried.add(track.videoId)
@@ -253,6 +292,9 @@ object PlayerHolder {
     fun playIndex(index: Int) {
         val q = _queue.value
         if (q.isEmpty() || index !in q.indices) return
+        // Selecting a track (manually or via next/previous) starts a new attempt session:
+        // its retry budget must not inherit a previous failure.
+        retried.remove(q[index].videoId)
         _currentIndex.value = index
         _currentTrack.value = q[index]
         start()
@@ -308,8 +350,17 @@ object PlayerHolder {
             val p = exoPlayer ?: return@runOnMain
             if (p.isPlaying) {
                 p.pause()
+            } else if (p.playbackState == Player.STATE_IDLE) {
+                // The engine is idle (fresh player, or a previous stream failed). A manual
+                // play must not reuse the cached URL that just failed: give the track a
+                // fresh retry budget and force a new resolution.
+                _currentTrack.value?.let { track ->
+                    retried.remove(track.videoId)
+                    invalidateStream(track.videoId)
+                }
+                start()
             } else {
-                if (p.playbackState == Player.STATE_IDLE) start() else p.play()
+                p.play()
             }
         }
     }
@@ -393,6 +444,38 @@ object PlayerHolder {
         runOnMain { _isBuffering.value = false }
     }
 
+    /**
+     * True when the player just reached STATE_ENDED while the known track duration says
+     * there should still be a substantial part left. That means the CDN served a truncated
+     * (or range-limited) stream, not that the song finished.
+     */
+    private fun endedPrematurely(): Boolean {
+        val p = exoPlayer ?: return false
+        val track = _currentTrack.value ?: return false
+        val expectedMs = track.durationSeconds * 1000
+        if (expectedMs <= 0) return false
+        val servedMs = p.duration.takeIf { it > 0 } ?: return false
+        return servedMs < expectedMs * 9 / 10
+    }
+
+    /**
+     * Recovers from a truncated stream: drop the cached URL, re-resolve a fresh one and
+     * replay from the start (a partial body carries no usable position mapping). After the
+     * retry budget is exhausted the end is treated as a normal end so the queue keeps going.
+     */
+    private fun recoverFromPrematureEnd() {
+        val track = _currentTrack.value ?: return
+        val canRetry = onPlaybackFailed != null && retried.add(track.videoId)
+        if (canRetry) {
+            resumePositionMs = 0L
+            invalidateStream(track.videoId)
+            onPlaybackFailed?.invoke(track)
+        } else {
+            PlaybackEvents.post("Şarkı tam yüklenemedi, sıradakine geçiliyor.")
+            playNext()
+        }
+    }
+
     /** Start (or restart) the currently selected track using an already-known source. */
     fun start() {
         val track = _currentTrack.value ?: return
@@ -444,7 +527,10 @@ object PlayerHolder {
             .build()
 
         try {
-            p.setMediaItem(mediaItem, 0)
+            // Resume from the saved position after a mid-stream failure; 0 on a normal start.
+            val startPosition = resumePositionMs.coerceAtLeast(0L)
+            resumePositionMs = 0L
+            p.setMediaItem(mediaItem, startPosition)
             p.prepare()
             p.play()
             _isBuffering.value = true

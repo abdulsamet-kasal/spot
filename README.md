@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.4.0` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.4.1` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,12 +15,30 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.4.1` | Yayın kararlılığı: kesilen akışta otomatik kurtarma (kaldığı yerden devam), bozuk URL'de manuel oynatmayla taze çözümleme, kilit ekranı medya kartı (önceki/duraklat/sonraki), aramada 60 sonuca kadar sayfalama |
 | `1.4.0` | Tekrar/oynatma hızı/uyku zamanlayıcısı, kuyruk düzenleme, radyo, sözler (LRCLIB), arama geçmişi, bağlantıdan oynatma, Geçmiş sekmesi, yedekle/geri yükle, Wi-Fi kısıtı, ana ekran widget'ı, uygulama kısayolları, güncelleme kontrolü, R8 + KSP + testler + CI |
 | `1.3.0` | Oynatıcıda çalma listesine ekleme, her şarkı satırında üç nokta menüsü, net kapak görselleri, anında şarkı geçişi, alt gezinme düzeltmesi |
 | `1.2.0` | Oynatma çökmesi giderildi, durum senkronizasyonu düzeltildi, hamburger menü + responsive arayüz |
 | `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.4.1 neler değişti?
+
+- **Kesilen akışlarda otomatik kurtarma:** YouTube CDN bağlantısı ortada koparsa
+  (şarkı ~1 dakikada durup bir daha başlamıyordu) uygulama URL'yi yeniden çözümler ve
+  kaldığı andan oynatmaya devam eder; şarkının geride kalan kısmında erken bitiş
+  algılanır ve taze URL ile yeniden başlatılır. Sunucu sadece aralıktaki (range) veriyi
+  veren URL'leri de seçmemeye özen gösterir.
+- **Tekrar başlatma düzeltmesi:** bir akış hatasından sonra oynat/duraklat düğmesi artık
+  ölü URL'yi yeniden kullanmaz; her manuel oynatma taze bir çözümleme ve yeni deneme
+  hakkıyla başlar.
+- **Kilit ekranı medya kartı:** bildirim ve kilit ekranında şarkı adı, sanatçı ve kapak
+  görünür; önceki / oynat-duraklat / sonraki düğmeleri çalışır (Android 13+ sistem medya
+  kartında da atla düğmeleri özel oturum komutlarıyla eklenir). Daha geniş ses tamponu
+  kısık ağlarda takılmaları azaltır.
+- **Daha uzun arama listesi:** arama artık ~20 yerine 60 sonuca kadar sayfalandırır
+  (aynı şarkılar tekilleştirilir; bir sayfa düşerse o zamana kadarki liste korunur).
 
 ### 1.4.0 neler değişti?
 
