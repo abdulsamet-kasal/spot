@@ -1,7 +1,10 @@
 package com.example.spoyt.ui.screens
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -9,26 +12,28 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.PlaylistPlay
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -37,12 +42,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.spoyt.R
+import com.example.spoyt.data.local.entities.TrackEntity
+import com.example.spoyt.download.Downloads
+import com.example.spoyt.ui.components.EmptyState
+import com.example.spoyt.ui.components.SpoytBackground
 import com.example.spoyt.ui.components.TrackRow
+import com.example.spoyt.ui.theme.SpoytGreen
+import com.example.spoyt.ui.theme.SpoytViolet
 import com.example.spoyt.ui.viewmodel.LibraryViewModel
 
 @Composable
@@ -55,136 +70,71 @@ fun LibraryScreen(
     val allTracks by viewModel.allTracks.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val progressMap by Downloads.progress.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var newPlaylistName by remember { mutableStateOf("") }
 
-    val tabs = listOf(
-        stringResource(R.string.library_liked),
-        stringResource(R.string.library_downloads),
-        stringResource(R.string.library_playlists)
-    )
-
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            Column {
+    SpoytBackground {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 16.dp, top = 18.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
                     text = stringResource(R.string.library_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 12.dp)
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
                 )
-                TabRow(selectedTabIndex = selectedTab) {
-                    tabs.forEachIndexed { index, label ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            text = { Text(label) }
+                if (selectedTab == 2) {
+                    IconButton(onClick = { newPlaylistName = ""; showCreateDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = stringResource(R.string.playlist_create),
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
             }
-        },
-        floatingActionButton = {
-            if (selectedTab == 2) {
-                FloatingActionButton(
-                    onClick = { newPlaylistName = ""; showCreateDialog = true },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = stringResource(R.string.playlist_create)
+
+            SegmentedTabs(
+                selected = selectedTab,
+                onSelect = { selectedTab = it },
+                labels = listOf(
+                    stringResource(R.string.library_liked),
+                    stringResource(R.string.library_downloads),
+                    stringResource(R.string.library_playlists)
+                )
+            )
+
+            Crossfade(targetState = selectedTab, label = "library-tab") { tab ->
+                when (tab) {
+                    0 -> LikedTab(liked, onPlay = { index ->
+                        viewModel.play(liked, index)
+                        onOpenPlayer()
+                    }, onLikeToggle = viewModel::toggleLike)
+
+                    1 -> DownloadsTab(
+                        downloads = downloads,
+                        allTracks = allTracks,
+                        progress = progressMap,
+                        onPlay = { track ->
+                            viewModel.play(listOf(track))
+                            onOpenPlayer()
+                        },
+                        onDelete = viewModel::deleteDownload
                     )
-                }
-            }
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            when (selectedTab) {
-                0 -> LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) {
-                    if (liked.isEmpty()) {
-                        item { EmptyMessage(stringResource(R.string.library_empty_liked)) }
-                    }
-                    itemsIndexed(liked) { index, track ->
-                        TrackRow(
-                            track = track,
-                            onClick = {
-                                viewModel.play(liked, index)
-                                onOpenPlayer()
-                            },
-                            isLiked = true,
-                            onLikeToggle = { viewModel.toggleLike(track) }
-                        )
-                    }
-                }
 
-                1 -> LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) {
-                    if (downloads.isEmpty()) {
-                        item { EmptyMessage(stringResource(R.string.library_empty_downloads)) }
-                    }
-                    items(downloads) { download ->
-                        val track = allTracks.find { it.videoId == download.videoId }
-                            ?: remember(download.videoId) {
-                                com.example.spoyt.data.local.entities.TrackEntity(
-                                    videoId = download.videoId,
-                                    title = download.videoId,
-                                    artist = "",
-                                    durationSeconds = 0,
-                                    thumbnailUrl = null
-                                )
-                            }
-                        TrackRow(
-                            track = track,
-                            onClick = { viewModel.play(listOf(track)); onOpenPlayer() },
-                            downloadState = download.state,
-                            onRemove = { viewModel.deleteDownload(download.videoId) }
-                        )
-                    }
-                }
-
-                2 -> LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) {
-                    if (playlists.isEmpty()) {
-                        item { EmptyMessage(stringResource(R.string.library_empty_playlists)) }
-                    }
-                    items(playlists) { playlist ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onOpenPlaylist(playlist.id) }
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.LibraryMusic,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(
-                                text = playlist.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(onClick = { onOpenPlaylist(playlist.id) }) {
-                                Icon(
-                                    imageVector = Icons.Default.PlaylistPlay,
-                                    contentDescription = stringResource(R.string.action_play_all)
-                                )
-                            }
-                            IconButton(onClick = { viewModel.deletePlaylist(playlist.id) }) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = stringResource(R.string.playlist_delete)
-                                )
-                            }
-                        }
-                    }
+                    else -> PlaylistsTab(
+                        playlists = playlists,
+                        onCreate = { newPlaylistName = ""; showCreateDialog = true },
+                        onOpen = onOpenPlaylist,
+                        onDelete = viewModel::deletePlaylist
+                    )
                 }
             }
         }
@@ -224,13 +174,199 @@ fun LibraryScreen(
 }
 
 @Composable
-private fun EmptyMessage(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+private fun SegmentedTabs(selected: Int, onSelect: (Int) -> Unit, labels: List<String>) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(32.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        labels.forEachIndexed { index, label ->
+            val isSelected = selected == index
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(
+                        if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                        else Color.Transparent
+                    )
+                    .clickable { onSelect(index) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LikedTab(
+    liked: List<TrackEntity>,
+    onPlay: (Int) -> Unit,
+    onLikeToggle: (TrackEntity) -> Unit
+) {
+    if (liked.isEmpty()) {
+        EmptyState(
+            icon = Icons.Default.Favorite,
+            title = stringResource(R.string.library_empty_liked),
+            subtitle = stringResource(R.string.library_empty_liked_subtitle)
+        )
+        return
+    }
+    LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 28.dp)) {
+        item {
+            CountLabel(stringResource(R.string.library_song_count, liked.size))
+        }
+        itemsIndexed(liked) { index, track ->
+            TrackRow(
+                track = track,
+                modifier = Modifier.padding(horizontal = 10.dp),
+                onClick = { onPlay(index) },
+                isLiked = true,
+                onLikeToggle = { onLikeToggle(track) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun DownloadsTab(
+    downloads: List<com.example.spoyt.data.local.entities.DownloadEntity>,
+    allTracks: List<TrackEntity>,
+    progress: Map<String, Int>,
+    onPlay: (TrackEntity) -> Unit,
+    onDelete: (String) -> Unit
+) {
+    if (downloads.isEmpty()) {
+        EmptyState(
+            icon = Icons.Default.DownloadDone,
+            title = stringResource(R.string.library_empty_downloads),
+            subtitle = stringResource(R.string.library_empty_downloads_subtitle)
+        )
+        return
+    }
+
+    LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 28.dp)) {
+        item { CountLabel(stringResource(R.string.library_song_count, downloads.size)) }
+        items(downloads) { download ->
+            val track = allTracks.find { it.videoId == download.videoId }
+                ?: remember(download.videoId) {
+                    TrackEntity(
+                        videoId = download.videoId,
+                        title = "İndirilen şarkı",
+                        artist = "",
+                        durationSeconds = 0,
+                        thumbnailUrl = null
+                    )
+                }
+            TrackRow(
+                track = track,
+                modifier = Modifier.padding(horizontal = 10.dp),
+                onClick = { onPlay(track) },
+                downloadState = download.state,
+                downloadProgress = progress[download.videoId],
+                onRemove = { onDelete(download.videoId) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaylistsTab(
+    playlists: List<com.example.spoyt.data.local.entities.PlaylistEntity>,
+    onCreate: () -> Unit,
+    onOpen: (Int) -> Unit,
+    onDelete: (Int) -> Unit
+) {
+    if (playlists.isEmpty()) {
+        EmptyState(
+            icon = Icons.Default.LibraryMusic,
+            title = stringResource(R.string.library_empty_playlists),
+            subtitle = stringResource(R.string.library_empty_playlists_subtitle)
+        )
+        return
+    }
+
+    LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp)) {
+        items(playlists) { playlist ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { onOpen(playlist.id) }
+                    .padding(horizontal = 6.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(50.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(
+                            Brush.linearGradient(listOf(SpoytViolet, SpoytGreen))
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LibraryMusic,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = playlist.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = stringResource(R.string.playlist_title),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = { onOpen(playlist.id) }) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = stringResource(R.string.action_play_all),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                IconButton(onClick = { onDelete(playlist.id) }) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = stringResource(R.string.playlist_delete),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CountLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 20.dp, top = 10.dp, bottom = 4.dp)
     )
 }

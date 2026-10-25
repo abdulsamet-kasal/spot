@@ -14,10 +14,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -27,6 +30,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.spoyt.di.AppContainer
+import com.example.spoyt.download.Downloads
+import com.example.spoyt.player.PlaybackEvents
 import com.example.spoyt.ui.components.MiniPlayer
 import com.example.spoyt.ui.components.SpoytBottomBar
 import com.example.spoyt.ui.nav.PlayerNavigationController
@@ -34,6 +39,7 @@ import com.example.spoyt.ui.nav.Screen
 import com.example.spoyt.ui.nav.SpoytNavHost
 import com.example.spoyt.ui.theme.SpoytTheme
 import com.example.spoyt.ui.viewmodel.PlayerViewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,12 +71,28 @@ private fun SpoytApp() {
     val playerViewModel: PlayerViewModel = viewModel()
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
 
+    // Playback and download layers report user-facing failures as text; surface them here.
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) {
+        launch {
+            PlaybackEvents.messages.collect { message ->
+                snackbarHostState.showSnackbar(message)
+            }
+        }
+        launch {
+            Downloads.messages.collect { message ->
+                snackbarHostState.showSnackbar(message)
+            }
+        }
+    }
+
     // The full player has its own layout; hide the bottom bar + mini player there.
     val isPlayerRoute = currentRoute == Screen.Player.route
     val showChrome = !isPlayerRoute && currentRoute != null
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
             if (showChrome) {
                 Column {

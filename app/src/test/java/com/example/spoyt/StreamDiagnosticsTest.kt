@@ -40,7 +40,7 @@ class StreamDiagnosticsTest {
             } else {
                 line("downloader already set: " + provider.javaClass.name)
             }
-            line("NewPipe extractor version = " + NewPipe.getVersion())
+            line("NewPipe extractor initialized")
 
             val service = NewPipe.getService("YouTube")
             line("service = " + service.serviceInfo.name)
@@ -65,17 +65,22 @@ class StreamDiagnosticsTest {
             for (item in items.take(2)) {
                 line("")
                 line("=== stream: " + item.name)
-                line("url = " + item.url)
+                line("search url = " + item.url)
 
-                val extractor = service.getStreamExtractor(item.url)
+                // Exactly what the app does: extract the id, then rebuild a youtube.com URL.
+                val videoId = Regex("[?&]v=([A-Za-z0-9_-]{11})").find(item.url)?.groupValues?.get(1)
+                line("videoId = " + videoId)
+                if (videoId == null) continue
+                val target = "https://www.youtube.com/watch?v=$videoId"
+
+                val extractor = service.getStreamExtractor(target)
                 extractor.fetchPage()
                 line("name = " + extractor.name)
                 line("duration = " + extractor.length)
                 line("audioStreams.count = " + extractor.audioStreams.size)
                 extractor.audioStreams.forEach { s ->
                     line(
-                        "  audio: itag=" + s.itagItem?.id +
-                            " fmt=" + s.format?.name +
+                        "  audio: fmt=" + s.format?.name +
                             " mime=" + s.format?.mimeType +
                             " bitrate=" + s.averageBitrate +
                             " contentPrefix=" + s.content.take(90)

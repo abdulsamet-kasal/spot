@@ -1,6 +1,7 @@
 package com.example.spoyt.download
 
 import android.content.Context
+import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -11,16 +12,45 @@ import com.example.spoyt.player.DownloadPaths
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 
 /**
  * Thin facade the UI calls to start/cancel downloads. Keeps WorkManager + Room bookkeeping
- * (QUEUED row first, then the worker flips it to DOWNLOADING / DONE / FAILED) in one place.
+ * (QUEUED row first, then the worker flips it to DOWNLOADING / DONE / FAILED) in one place,
+ * plus the live download progress that the UI shows as a percentage.
  */
 object Downloads {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** videoId -> 0..100 while a download is running. Removed when it finishes. */
+    private val _progress = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val progress: StateFlow<Map<String, Int>> = _progress.asStateFlow()
+
+    /** One-shot user-facing messages (download finished / failed). */
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val messages: SharedFlow<String> = _messages.asSharedFlow()
+
+    fun setProgress(videoId: String, percent: Int) {
+        _progress.update { it + (videoId to percent.coerceIn(0, 100)) }
+    }
+
+    fun clearProgress(videoId: String) {
+        _progress.update { it - videoId }
+    }
+
+    fun postMessage(message: String) {
+        _messages.tryEmit(message)
+    }
 
     /** Enqueues a download for [track]. No-op if it is already queued or finished. */
     fun enqueue(context: Context, track: TrackEntity) {
@@ -32,6 +62,7 @@ object Downloads {
                     DownloadWorker.STATE_DONE
                 )
             ) {
+                // Re-download only when the previous attempt actually failed.
                 return@launch
             }
 
@@ -45,7 +76,7 @@ object Downloads {
                 )
             }
 
-            val data = androidx.work.Data.Builder()
+            val data = Data.Builder()
                 .putString(DownloadWorker.KEY_VIDEO_ID, track.videoId)
                 .putString(DownloadWorker.KEY_TITLE, track.title)
                 .putString(DownloadWorker.KEY_ARTIST, track.artist)
@@ -62,6 +93,8 @@ object Downloads {
                     ExistingWorkPolicy.REPLACE,
                     request
                 )
+
+            postMessage("\"${track.title}\" indirme sırasına alındı.")
         }
     }
 
@@ -69,12 +102,31 @@ object Downloads {
     fun delete(context: Context, videoId: String) {
         scope.launch {
             runCatching {
+                WorkManager.getInstance(context)
+                    .cancelUniqueWork(DownloadWorker.UNIQUE_PREFIX + videoId)
                 val row = AppContainer.downloads.getDownload(videoId)
                 if (row != null && row.filePath.isNotEmpty()) {
                     File(row.filePath).delete()
                 }
                 AppContainer.downloads.delete(videoId)
                 DownloadPaths.remove(videoId)
+                clearProgress(videoId)
+            }
+        }
+    }
+
+    /** Removes every downloaded file and its Room row (used by "clear cache" in Settings). */
+    fun deleteAll(context: Context) {
+        scope.launch {
+            runCatching {
+                val rows = AppContainer.downloads.getAllDownloads().first()
+                rows.forEach { row ->
+                    if (row.filePath.isNotEmpty()) File(row.filePath).delete()
+                    DownloadPaths.remove(row.videoId)
+                    AppContainer.downloads.delete(row.videoId)
+                }
+                File(context.filesDir, "downloads").deleteRecursively()
+                _progress.value = emptyMap()
             }
         }
     }

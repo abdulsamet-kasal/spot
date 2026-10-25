@@ -2,12 +2,10 @@ package com.example.spoyt.data.remote
 
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.StreamingService
-import org.schabi.newpipe.extractor.MediaFormat
 import org.schabi.newpipe.extractor.downloader.Downloader
-import org.schabi.newpipe.extractor.exceptions.ExtractionException
 import org.schabi.newpipe.extractor.stream.AudioStream
-import org.schabi.newpipe.extractor.stream.Stream
 import org.schabi.newpipe.extractor.stream.StreamInfoItemExtractor
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Search result returned by [YoutubeSource.search].
@@ -22,47 +20,57 @@ data class SearchResult(
 
 /**
  * Resolved stream information returned by [YoutubeSource.resolveAudioStream].
+ *
+ * YouTube CDN URLs carry an expiry (`expire=...`), usually ~6 hours, so [resolvedAtMs] is
+ * stored to allow [isExpired] checks: replaying a stale URL just yields a 403.
  */
 data class ResolvedStream(
     val url: String,
     val mimeType: String?,
-    val fileExtension: String?
-)
+    val fileExtension: String?,
+    val resolvedAtMs: Long = System.currentTimeMillis(),
+    val durationSeconds: Long = 0
+) {
+    fun isExpired(now: Long = System.currentTimeMillis()): Boolean =
+        now - resolvedAtMs > MAX_AGE_MS
+
+    companion object {
+        /** Stay well inside YouTube's ~6h URL lifetime. */
+        const val MAX_AGE_MS = 90L * 60L * 1000L
+    }
+}
 
 /**
- * Encapsulates all NewPipe Extractor usage so the rest of the app is not coupled to the library.
- * If YouTube changes break extraction, only this class needs updating.
+ * The single place in the app that talks to NewPipe Extractor.
  *
- * Responsibilities:
- *   - Search YouTube (music-filtered) for tracks.
- *   - Resolve the best audio-only stream URL for a given video ID.
+ * Everything here is blocking; callers must use `Dispatchers.IO`. Every public method is
+ * wrapped in try/catch and returns an empty result on failure so the UI never crashes.
  *
- * All methods perform blocking I/O and must be called on [kotlinx.coroutines.Dispatchers.IO].
+ * Notes on YouTube Music: NewPipe Extractor has no separate "YouTube Music" service. Its
+ * YouTube service switches to `YoutubeMusicSearchExtractor` when the search content filter
+ * starts with "music_", which is why [MUSIC_SONGS_FILTER] is used below.
  */
 class YoutubeSource {
 
-    private val service: StreamingService by lazy {
-        NewPipe.getService(YOUTUBE_SERVICE_NAME)
-    }
+    private val serviceRef = AtomicReference<StreamingService?>(null)
 
-    private val downloader: Downloader = NewPipe.getDownloader()
+    private fun service(): StreamingService {
+        serviceRef.get()?.let { return it }
+        val resolved = NewPipe.getService(YOUTUBE_SERVICE_NAME)
+        serviceRef.set(resolved)
+        return resolved
+    }
 
     /**
      * Searches YouTube Music for songs matching [query].
      * Returns an empty list on any network or extraction error (never throws).
      */
     fun search(query: String): List<SearchResult> {
+        if (query.isBlank()) return emptyList()
         return try {
-            // "music_songs" is the only way to reach YouTube Music through this service:
-            // YoutubeService switches to YoutubeMusicSearchExtractor when the filter
-            // starts with "music_". Other valid values: music_videos, music_albums,
-            // music_playlists, videos, channels, playlists, ALL.
-            val extractor = service.getSearchExtractor(query, listOf(MUSIC_SONGS_FILTER), "")
+            val extractor = service().getSearchExtractor(query, listOf(MUSIC_SONGS_FILTER), "")
             extractor.fetchPage()
-            val page = extractor.getInitialPage()
-            page.items.mapNotNull { item ->
-                toSearchResult(item)
-            }
+            extractor.initialPage.items.mapNotNull { toSearchResult(it) }
         } catch (e: Exception) {
             // Network/extraction failures must not crash the app.
             emptyList()
@@ -76,25 +84,41 @@ class YoutubeSource {
      */
     fun resolveAudioStream(videoId: String): ResolvedStream? {
         return try {
-            val streamUrl = "https://www.youtube.com/watch?v=$videoId"
-            val extractor = service.getStreamExtractor(streamUrl)
+            val extractor = service().getStreamExtractor(urlFor(videoId))
             extractor.fetchPage()
-            val audioStreams = extractor.getAudioStreams()
 
-            val best = audioStreams.maxByOrNull { it.averageBitrate }
-                ?: audioStreams.firstOrNull()
+            val playable = extractor.audioStreams
+                .filter { stream -> isPlayable(stream) }
+
+            // Prefer a well-supported container (m4a/AAC) at the highest bitrate; fall back
+            // to any playable audio stream (Opus/WebM) when only those exist.
+            val bestM4a = playable
+                .filter { it.format?.mimeType?.contains("mp4", ignoreCase = true) == true }
+                .maxByOrNull { it.averageBitrate }
+            val bestAny = playable.maxByOrNull { it.averageBitrate }
+            val best = bestM4a ?: bestAny
 
             best?.let { stream ->
-                val format: MediaFormat? = stream.format
+                val format = stream.format
                 ResolvedStream(
                     url = stream.content,
                     mimeType = format?.mimeType,
-                    fileExtension = format?.suffix
+                    fileExtension = format?.suffix,
+                    resolvedAtMs = System.currentTimeMillis(),
+                    durationSeconds = extractor.length.takeIf { it > 0 } ?: 0
                 )
             }
         } catch (e: Exception) {
+            // Extraction failures are expected when YouTube changes something; report "cannot
+            // play" instead of crashing.
             null
         }
+    }
+
+    private fun isPlayable(stream: AudioStream): Boolean {
+        val content = stream.content
+        val urlOk = content.startsWith("https://") || content.startsWith("http://")
+        return urlOk && stream.averageBitrate > 0
     }
 
     private fun toSearchResult(item: org.schabi.newpipe.extractor.InfoItem): SearchResult? {
@@ -102,20 +126,16 @@ class YoutubeSource {
             val videoId = extractVideoId(item.url)
             if (videoId.isNullOrEmpty()) return null
 
-            val title = item.name
-            val artist: String
-            val duration: Long
-            val thumbnail: String?
+            val title = item.name?.trim().orEmpty()
+            if (title.isEmpty()) return null
 
+            var artist = ""
+            var duration = 0L
             if (item is StreamInfoItemExtractor) {
-                artist = cleanArtistName(item.getUploaderName())
-                duration = item.getDuration().coerceAtLeast(0)
-                thumbnail = item.getThumbnails().firstOrNull()?.getUrl()
-            } else {
-                artist = ""
-                duration = 0
-                thumbnail = item.getThumbnails().firstOrNull()?.getUrl()
+                artist = cleanArtistName(item.uploaderName.orEmpty())
+                duration = item.duration.coerceAtLeast(0)
             }
+            val thumbnail = item.thumbnails.firstOrNull()?.url
 
             SearchResult(
                 videoId = videoId,
@@ -136,23 +156,34 @@ class YoutubeSource {
     private fun cleanArtistName(uploaderName: String): String {
         var name = uploaderName.trim()
         if (name.isEmpty()) return ""
-        // Auto-generated topic channels are named "<Artist> - Topic".
-        name = name.removeSuffix("- Topic").removeSuffix("- VEVO")
-        // Case variations seen on YouTube ("- topic", "- vevo").
-        name = name.removeSuffix("- topic").removeSuffix("- vevo")
-        name = name.trim().trimEnd('-', '–').trim()
-        return if (name.isEmpty()) uploaderName.trim() else name
+        listOf("- Topic", "- topic", "- VEVO", "- vevo").forEach { suffix ->
+            if (name.endsWith(suffix, ignoreCase = true)) {
+                name = name.dropLast(suffix.length).trim()
+            }
+        }
+        name = name.trimEnd('-', '–', '—').trim()
+        return name.ifEmpty { uploaderName.trim() }
     }
 
+    private fun urlFor(videoId: String): String = "https://www.youtube.com/watch?v=$videoId"
+
+    /**
+     * Accepts `https://www.youtube.com/watch?v=ID`, `https://music.youtube.com/watch?v=ID`,
+     * `https://youtu.be/ID` and `...&v=ID` forms.
+     */
     private fun extractVideoId(url: String): String? {
-        // YouTube stream URLs from NewPipe look like: https://www.youtube.com/watch?v=VIDEO_ID
-        val param = "v="
-        val idx = url.indexOf(param)
-        return if (idx >= 0) {
-            val start = idx + param.length
-            val end = url.indexOf('&', start)
-            if (end == -1) url.substring(start) else url.substring(start, end)
-        } else null
+        if (url.contains("/watch")) {
+            val marker = url.indexOf("v=")
+            if (marker >= 0) {
+                val start = marker + 2
+                val end = url.indexOf('&', start)
+                val id = if (end == -1) url.substring(start) else url.substring(start, end)
+                if (id.isNotBlank()) return id
+            }
+        }
+        // youtu.be/<id>
+        val short = Regex("youtu\\.be/([A-Za-z0-9_-]{6,})").find(url)
+        return short?.groupValues?.get(1)
     }
 
     companion object {
@@ -160,8 +191,8 @@ class YoutubeSource {
         const val YOUTUBE_SERVICE_NAME = "YouTube"
 
         /**
-         * Content filter that makes NewPipe search YouTube Music instead of plain
-         * YouTube. Any filter starting with "music_" enables YoutubeMusicSearchExtractor.
+         * Content filter that makes NewPipe search YouTube Music instead of plain YouTube.
+         * Any filter starting with "music_" enables YoutubeMusicSearchExtractor.
          */
         private const val MUSIC_SONGS_FILTER = "music_songs"
     }

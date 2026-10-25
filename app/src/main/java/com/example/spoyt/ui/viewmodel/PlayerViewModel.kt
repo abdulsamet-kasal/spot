@@ -17,6 +17,7 @@ data class PlayerUiState(
     val queue: List<TrackEntity> = emptyList(),
     val currentIndex: Int = 0,
     val isPlaying: Boolean = false,
+    val isBuffering: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L
 )
@@ -56,6 +57,11 @@ class PlayerViewModel : ViewModel() {
             }
         }
         viewModelScope.launch {
+            PlayerHolder.isBufferingState.collect { buffering ->
+                _uiState.update { it.copy(isBuffering = buffering) }
+            }
+        }
+        viewModelScope.launch {
             AppContainer.tracks.getLikedTracks().collect { list ->
                 _likedIds.value = list.mapTo(HashSet()) { it.videoId }
             }
@@ -85,6 +91,10 @@ class PlayerViewModel : ViewModel() {
     }
 
     fun playAt(index: Int) = PlayerHolder.playIndex(index)
+
+    fun download(track: TrackEntity) {
+        viewModelScope.enqueueDownload(track)
+    }
 
     fun toggleLike(track: TrackEntity) {
         viewModelScope.toggleLike(track)

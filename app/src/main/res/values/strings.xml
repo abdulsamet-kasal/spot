@@ -2,7 +2,7 @@
     <string name="app_name">Spoyt</string>
 
     <!-- Bottom navigation -->
-    <string name="nav_home">Ev</string>
+    <string name="nav_home">Ana Sayfa</string>
     <string name="nav_search">Ara</string>
     <string name="nav_library">Kütüphane</string>
 
@@ -11,6 +11,15 @@
     <string name="home_recent">Son dinledikleriniz</string>
     <string name="home_liked">Beğenilen Şarkılar</string>
     <string name="home_downloads">İndirilenler</string>
+    <string name="home_greeting_morning">Günaydın</string>
+    <string name="home_greeting_afternoon">İyi günler</string>
+    <string name="home_greeting_evening">İyi akşamlar</string>
+    <string name="home_greeting_subtitle">Ne dinlemek istersin?</string>
+    <string name="home_quick_access">Hızlı erişim</string>
+    <string name="home_search_pill">Şarkı, sanatçı veya albüm ara</string>
+    <string name="home_empty_recent">Henüz bir şey dinlemedin. Aramaya dokunup başla.</string>
+    <string name="home_liked_subtitle">Beğendiğin tüm şarkılar</string>
+    <string name="home_downloads_subtitle">Çevrimdışı dinleyebileceklerin</string>
 
     <!-- Search -->
     <string name="search_title">Arama</string>
@@ -55,6 +64,10 @@
     <string name="library_empty_liked">Henüz beğenilen şarkı yok</string>
     <string name="library_empty_downloads">Henüz indirilen şarkı yok</string>
     <string name="library_empty_playlists">Henüz çalma listesi yok</string>
+    <string name="library_song_count">%1$d şarkı</string>
+    <string name="library_empty_liked_subtitle">Beğendiğin şarkılar burada birikir.</string>
+    <string name="library_empty_downloads_subtitle">İndirdiğin şarkılar çevrimdışı çalar.</string>
+    <string name="library_empty_playlists_subtitle">Yeni bir liste oluşturup şarkı ekle.</string>
 
     <!-- Playlists -->
     <string name="playlist_title">Çalma Listesi</string>
@@ -72,6 +85,12 @@
     <string name="settings_cache_cleared">Önbellek temizlendi</string>
     <string name="settings_clear_history">Dinleme geçmişini temizle</string>
     <string name="settings_cache_size">Önbellek boyutu</string>
+    <string name="settings_storage">Depolama</string>
+    <string name="settings_clear_downloads">İndirilenleri sil</string>
+    <string name="settings_clear_downloads_desc">Tüm indirilen dosyaları siler</string>
+    <string name="settings_downloads_size">İndirilenler boyutu</string>
+    <string name="settings_about">Uygulama</string>
+    <string name="settings_legal">Kişisel kullanım için geliştirildi. Hesap, reklam ve izleme yok.</string>
 
     <!-- Common actions -->
     <string name="action_cancel">İptal</string>
