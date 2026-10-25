@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.spoyt">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Required by Media3 for background playback (Android 14+ needs FOREGROUND_SERVICE). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Required to show the media notification and lock-screen controls (Android 13+). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Downloads use app-specific internal storage, so no storage permissions are needed. -->
+
+    <application
+        android:name=".di.SpoytApplication"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Spoyt"
+        android:usesCleartextTraffic="true">
+
+        <!-- Single activity hosting all Compose screens via Navigation Compose. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTop"
+            android:configChanges="orientation|keyboardHidden|screenSize|uiMode"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- MediaSessionService keeps playback alive in the background and publishes the
+             media notification / lock-screen controls. The intent-filter is the Media3
+             contract that lets the system, Bluetooth devices and the lock screen talk to
+             the session (this is what makes headset play/pause work). -->
+        <service
+            android:name=".player.MusicPlaybackService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+
+    </application>
+
+</manifest>

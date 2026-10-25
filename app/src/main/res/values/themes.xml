@@ -1,0 +1,7 @@
+<resources>
+    <!-- Base application theme. The Compose Material theme is applied in code via SpoytTheme,
+         so this only provides a light fallback for any legacy views. -->
+    <style name="Theme.Spoyt" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

@@ -1,0 +1,97 @@
+<resources>
+    <string name="app_name">Spoyt</string>
+
+    <!-- Bottom navigation -->
+    <string name="nav_home">Ev</string>
+    <string name="nav_search">Ara</string>
+    <string name="nav_library">Kütüphane</string>
+
+    <!-- Home -->
+    <string name="home_title">Ana Sayfa</string>
+    <string name="home_recent">Son dinledikleriniz</string>
+    <string name="home_liked">Beğenilen Şarkılar</string>
+    <string name="home_downloads">İndirilenler</string>
+
+    <!-- Search -->
+    <string name="search_title">Arama</string>
+    <string name="search_hint">Şarkı veya sanatçı ara\u2026</string>
+    <string name="search_no_results">Sonuç bulunamadı</string>
+    <string name="search_error">Arama sırasında hata oluştu</string>
+
+    <!-- Player / mini player -->
+    <string name="player_title">Oynatıcı</string>
+    <string name="player_play">Oynat</string>
+    <string name="player_pause">Durdur</string>
+    <string name="player_next">Sonraki</string>
+    <string name="player_previous">Önceki</string>
+    <string name="player_expand">Tam ekran oynatıcıyı aç</string>
+    <string name="player_collapse">Küçült</string>
+    <string name="player_stream_unavailable">Akış çözümlenemedi, tekrar deneyin</string>
+    <string name="player_unknown_title">Bilinmeyen başlık</string>
+    <string name="player_unknown_artist">Bilinmeyen sanatçı</string>
+
+    <!-- Track row / more menu -->
+    <string name="menu_play_next">Sonraya ekle</string>
+    <string name="menu_play_now">Şimdi oynat</string>
+    <string name="menu_add_playlist">Çalma listesine ekle</string>
+    <string name="menu_like">Beğen</string>
+    <string name="menu_unlike">Beğeniyi kaldır</string>
+    <string name="menu_download">İndir</string>
+    <string name="menu_downloaded">İndirildi</string>
+    <string name="menu_delete_from_playlist">Listeden kaldır</string>
+
+    <!-- Download states (shown on rows) -->
+    <string name="download_queued">Sırada</string>
+    <string name="download_downloading">İndiriliyor</string>
+    <string name="download_done">Tamamlandı</string>
+    <string name="download_failed">Başarısız</string>
+    <string name="download_retry">Tekrar dene</string>
+
+    <!-- Library -->
+    <string name="library_title">Kütüphane</string>
+    <string name="library_liked">Beğenilen Şarkılar</string>
+    <string name="library_downloads">İndirilenler</string>
+    <string name="library_playlists">Çalma Listeleri</string>
+    <string name="library_empty_liked">Henüz beğenilen şarkı yok</string>
+    <string name="library_empty_downloads">Henüz indirilen şarkı yok</string>
+    <string name="library_empty_playlists">Henüz çalma listesi yok</string>
+
+    <!-- Playlists -->
+    <string name="playlist_title">Çalma Listesi</string>
+    <string name="playlist_create">Yeni liste oluştur</string>
+    <string name="playlist_name_hint">Liste adı</string>
+    <string name="playlist_play_all">Tümünü oynat</string>
+    <string name="playlist_rename">Yeniden adlandır</string>
+    <string name="playlist_delete">Sil</string>
+    <string name="playlist_empty">Bu listedeki şarkı yok</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Ayarlar</string>
+    <string name="settings_version">Sürüm</string>
+    <string name="settings_clear_cache">Önbelleği temizle</string>
+    <string name="settings_cache_cleared">Önbellek temizlendi</string>
+    <string name="settings_clear_history">Dinleme geçmişini temizle</string>
+    <string name="settings_cache_size">Önbellek boyutu</string>
+
+    <!-- Common actions -->
+    <string name="action_cancel">İptal</string>
+    <string name="action_save">Kaydet</string>
+    <string name="action_delete">Sil</string>
+    <string name="action_rename">Yeniden adlandır</string>
+    <string name="action_add">Ekle</string>
+    <string name="action_retry">Tekrar dene</string>
+    <string name="action_back">Geri</string>
+    <string name="action_more">Diğer seçenekler</string>
+    <string name="action_search">Ara</string>
+    <string name="action_play_all">Tümünü oynat</string>
+
+    <!-- Errors -->
+    <string name="error_generic">Bir sorun oluştu. Tekrar deneyin.</string>
+    <string name="error_no_connection">Bağlantı kurulamadı. İnternet bağlantınızı kontrol edin.</string>
+    <string name="error_stream_unavailable">Şu anda oynatılamıyor.</string>
+
+    <!-- Add to playlist dialog -->
+    <string name="add_to_playlist_title">Çalma listesine ekle</string>
+    <string name="add_to_playlist_new">Yeni liste oluştur</string>
+    <string name="playlists_dialog_title">Çalma Listeleri</string>
+</resources>

@@ -1,0 +1,26 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+local.properties
+.cxx/
+release/
+
+# IDE
+.idea/
+*.iml
+*.hprof
+.DS_Store
+
+# Kotlin
+.kotlin/
+
+# Logs / diagnostics
+*.log
+diag.txt

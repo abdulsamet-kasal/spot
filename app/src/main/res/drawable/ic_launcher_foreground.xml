@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="128dp"
+    android:height="128dp"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+    <!-- Simple music-note-style mark in Spotify-like green. -->
+    <path
+        android:fillColor="#1DB954"
+        android:pathData="M64,12 C35.3,12 12,35.3 12,64 C12,84.7 27.3,102.7 48,108 L52,104 C38,100 27,86 27,64 C27,42.2 44.2,25 66,25 C78,25 88,30.6 95,38.5 L103,46.5 C110,39 116,31 121,25 C121,39.7 108,56 90,61 L86,57 C96,53 103,45 103,36 C103,19.9 89.1,6 72,6 C54.9,6 41,19.9 41,36 C41,45 48,53 58,57 L54,61 C36,56 23,39.7 23,25 C23,11.2 34.2,0 52,0 C69.8,0 85,11.2 85,25 C85,36 78,45 68,50 L64,54 L60,50 C50,45 43,36 43,25 C43,12.5 53.5,3 66,3 C78.5,3 89,12.5 89,25 C89,36 82,45 72,50 L76,54 C80,50 88,53 98,61 C80,56 62,61 64,64 C64,84.7 84.7,105.3 105.3,105.3 C105.3,84.7 84.7,64 64,64 Z" />
+</vector>
