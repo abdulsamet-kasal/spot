@@ -78,6 +78,42 @@ class YoutubeSource {
     }
 
     /**
+     * Resolves the metadata (title/artist/duration/thumbnail) of a single video id, e.g. one
+     * pasted as a YouTube link into the search field. Returns null on any failure.
+     */
+    fun trackFor(videoId: String): SearchResult? = try {
+        val extractor = service().getStreamExtractor(urlFor(videoId))
+        extractor.fetchPage()
+        SearchResult(
+            videoId = videoId,
+            title = extractor.name?.trim().orEmpty(),
+            artist = cleanArtistName(extractor.uploaderName.orEmpty()),
+            durationSeconds = extractor.length.coerceAtLeast(0),
+            thumbnailUrl = extractor.thumbnails.firstOrNull()?.url
+        ).takeIf { it.title.isNotEmpty() }
+    } catch (e: Exception) {
+        null
+    }
+
+    /**
+     * Related tracks ("radio") for a seed video, used by the "Radyo başlat" action.
+     * Related items include videos of every kind; the caller decides what to queue.
+     */
+    fun related(videoId: String): List<SearchResult> = try {
+        val extractor = service().getStreamExtractor(urlFor(videoId))
+        extractor.fetchPage()
+        // getRelatedStreams() is @Nullable and yields a collector; .items is List<StreamInfoItem>.
+        val items = extractor.relatedStreams?.items.orEmpty()
+        items
+            .mapNotNull { toSearchResult(it) }
+            .filter { it.durationSeconds > 0 }
+            .take(15)
+    } catch (e: Exception) {
+        // Related items are a bonus; an empty list means "no radio".
+        emptyList()
+    }
+
+    /**
      * Resolves the best audio-only stream URL for [videoId].
      * Returns null if no audio stream can be extracted.
      * Must be called on [kotlinx.coroutines.Dispatchers.IO].
@@ -123,7 +159,7 @@ class YoutubeSource {
 
     private fun toSearchResult(item: org.schabi.newpipe.extractor.InfoItem): SearchResult? {
         return try {
-            val videoId = extractVideoId(item.url)
+            val videoId = YouTubeUtils.extractVideoId(item.url)
             if (videoId.isNullOrEmpty()) return null
 
             val title = item.name?.trim().orEmpty()
@@ -150,41 +186,13 @@ class YoutubeSource {
     }
 
     /**
-     * Turns YouTube/YouTube Music channel names into something readable in the UI:
-     * "Pink Floyd - Topic" -> "Pink Floyd", "Daft Punk - VEVO" -> "Daft Punk".
+     * Turns YouTube/YouTube Music channel names into something readable in the UI.
+     * Delegates to [YouTubeUtils] so the logic stays unit-testable.
      */
-    private fun cleanArtistName(uploaderName: String): String {
-        var name = uploaderName.trim()
-        if (name.isEmpty()) return ""
-        listOf("- Topic", "- topic", "- VEVO", "- vevo").forEach { suffix ->
-            if (name.endsWith(suffix, ignoreCase = true)) {
-                name = name.dropLast(suffix.length).trim()
-            }
-        }
-        name = name.trimEnd('-', '–', '—').trim()
-        return name.ifEmpty { uploaderName.trim() }
-    }
+    private fun cleanArtistName(uploaderName: String): String =
+        YouTubeUtils.cleanArtistName(uploaderName)
 
     private fun urlFor(videoId: String): String = "https://www.youtube.com/watch?v=$videoId"
-
-    /**
-     * Accepts `https://www.youtube.com/watch?v=ID`, `https://music.youtube.com/watch?v=ID`,
-     * `https://youtu.be/ID` and `...&v=ID` forms.
-     */
-    private fun extractVideoId(url: String): String? {
-        if (url.contains("/watch")) {
-            val marker = url.indexOf("v=")
-            if (marker >= 0) {
-                val start = marker + 2
-                val end = url.indexOf('&', start)
-                val id = if (end == -1) url.substring(start) else url.substring(start, end)
-                if (id.isNotBlank()) return id
-            }
-        }
-        // youtu.be/<id>
-        val short = Regex("youtu\\.be/([A-Za-z0-9_-]{6,})").find(url)
-        return short?.groupValues?.get(1)
-    }
 
     companion object {
         /** The canonical name of the YouTube service in NewPipe Extractor. */

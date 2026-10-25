@@ -35,6 +35,16 @@ class LibraryViewModel : ViewModel() {
         AppContainer.playlists.getAllPlaylists()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** "Geçmiş" tab: everything played, most recent first. */
+    val recentTracks: StateFlow<List<TrackEntity>> =
+        AppContainer.history.getRecentTracks()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** "Geçmiş" tab: most played tracks, by play count. */
+    val topTracks: StateFlow<List<TrackEntity>> =
+        AppContainer.history.getMostPlayedTracks(50)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun createPlaylist(name: String, onCreated: (Int) -> Unit) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return

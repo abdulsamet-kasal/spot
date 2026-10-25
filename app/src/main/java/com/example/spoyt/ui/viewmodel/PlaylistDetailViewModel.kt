@@ -104,6 +104,17 @@ class PlaylistDetailViewModel : ViewModel() {
         viewModelScope.enqueueDownload(track)
     }
 
+    /** Enqueues every track in the playlist (already-done ones are skipped by Downloads). */
+    fun downloadAll() {
+        val list = _tracks.value
+        if (list.isEmpty()) return
+        viewModelScope.launch {
+            list.forEach { track ->
+                runCatching { Downloads.enqueue(AppContainer.context, track) }
+            }
+        }
+    }
+
     /** Plays the track right after the current one without touching the rest of the queue. */
     fun addToQueue(track: TrackEntity) {
         viewModelScope.launch {

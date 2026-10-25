@@ -1,6 +1,7 @@
 package com.example.spoyt
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -42,15 +43,18 @@ import com.example.spoyt.ui.components.SpoytDrawer
 import com.example.spoyt.ui.nav.PlayerNavigationController
 import com.example.spoyt.ui.nav.Screen
 import com.example.spoyt.ui.nav.SpoytNavHost
+import com.example.spoyt.ui.nav.UiRequests
 import com.example.spoyt.ui.theme.SpoytTheme
 import com.example.spoyt.ui.viewmodel.HomeViewModel
 import com.example.spoyt.ui.viewmodel.PlayerViewModel
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppContainer.init(applicationContext)
+        handleShortcutIntent(intent)
         setContent {
             SpoytTheme {
                 Surface(
@@ -61,6 +65,26 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // singleTop: launcher shortcuts arrive here when the app is already running.
+        handleShortcutIntent(intent)
+    }
+
+    /** App shortcuts ("Ara", "Beğenilenler", "İndirilenler") land as an extra on the intent. */
+    private fun handleShortcutIntent(intent: Intent?) {
+        runCatching {
+            val tab = intent?.getStringExtra(EXTRA_TAB)?.takeIf { intent.action == ACTION_OPEN_TAB }
+                ?: return
+            UiRequests.requestShortcut(tab)
+        }
+    }
+
+    companion object {
+        const val ACTION_OPEN_TAB = "com.example.spoyt.action.OPEN_TAB"
+        const val EXTRA_TAB = "tab"
     }
 }
 
@@ -91,6 +115,24 @@ private fun SpoytApp() {
             // do nothing.
             popUpTo(Screen.Home.route) { inclusive = screen.route == Screen.Home.route }
             launchSingleTop = true
+        }
+    }
+
+    // Launcher shortcuts ("Ara", "Beğenilenler", "İndirilenler") arrive here as one-shots.
+    LaunchedEffect(Unit) {
+        UiRequests.shortcut.collect { (_, tab) ->
+            when (tab) {
+                "search" -> navigateTo(Screen.Search)
+                "liked" -> {
+                    UiRequests.libraryTab.value = 0
+                    navigateTo(Screen.Library)
+                }
+                "downloads" -> {
+                    UiRequests.libraryTab.value = 1
+                    navigateTo(Screen.Library)
+                }
+            }
+            if (tab != null) UiRequests.consume()
         }
     }
 

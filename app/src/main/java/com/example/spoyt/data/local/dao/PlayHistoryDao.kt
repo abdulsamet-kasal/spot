@@ -26,6 +26,15 @@ interface PlayHistoryDao {
     """)
     fun getRecentTracks(): Flow<List<TrackEntity>>
 
+    @Query("""
+        SELECT t.*, COUNT(ph.id) AS playCount FROM tracks t
+        JOIN play_history ph ON t.videoId = ph.videoId
+        GROUP BY t.videoId
+        ORDER BY playCount DESC, MAX(ph.playedAt) DESC
+        LIMIT :limit
+    """)
+    fun getMostPlayedTracks(limit: Int): Flow<List<TrackEntity>>
+
     @Query("SELECT COUNT(*) FROM play_history WHERE videoId = :videoId")
     suspend fun count(videoId: String): Int
 }

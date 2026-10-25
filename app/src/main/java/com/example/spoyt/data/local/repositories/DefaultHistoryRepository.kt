@@ -20,5 +20,8 @@ class DefaultHistoryRepository(private val database: AppDatabase) : HistoryRepos
 
     override fun getRecentTracks(): Flow<List<TrackEntity>> = dao.getRecentTracks()
 
+    override fun getMostPlayedTracks(limit: Int): Flow<List<TrackEntity>> =
+        dao.getMostPlayedTracks(limit)
+
     override suspend fun playCount(videoId: String): Int = dao.count(videoId)
 }

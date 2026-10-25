@@ -1,12 +1,15 @@
 package com.example.spoyt.download
 
 import android.content.Context
+import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.spoyt.data.local.entities.DownloadEntity
 import com.example.spoyt.data.local.entities.TrackEntity
+import com.example.spoyt.data.prefs.AppPrefs
 import com.example.spoyt.di.AppContainer
 import com.example.spoyt.player.DownloadPaths
 import kotlinx.coroutines.CoroutineScope
@@ -91,6 +94,17 @@ object Downloads {
             val request = OneTimeWorkRequestBuilder<DownloadWorker>()
                 .setInputData(data)
                 .addTag(DownloadWorker.UNIQUE_PREFIX + track.videoId)
+                .apply {
+                    // "Sadece Wi-Fi" preference gates the job at the WorkManager level, so a
+                    // queued download simply waits (with no retries burned) until unmetered.
+                    if (AppPrefs.wifiOnlyDownloads) {
+                        setConstraints(
+                            Constraints.Builder()
+                                .setRequiredNetworkType(NetworkType.UNMETERED)
+                                .build()
+                        )
+                    }
+                }
                 .build()
 
             WorkManager.getInstance(context)

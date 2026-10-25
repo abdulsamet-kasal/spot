@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.3.0` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.4.0` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,11 +15,69 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.4.0` | Tekrar/oynatma hızı/uyku zamanlayıcısı, kuyruk düzenleme, radyo, sözler (LRCLIB), arama geçmişi, bağlantıdan oynatma, Geçmiş sekmesi, yedekle/geri yükle, Wi-Fi kısıtı, ana ekran widget'ı, uygulama kısayolları, güncelleme kontrolü, R8 + KSP + testler + CI |
 | `1.3.0` | Oynatıcıda çalma listesine ekleme, her şarkı satırında üç nokta menüsü, net kapak görselleri, anında şarkı geçişi, alt gezinme düzeltmesi |
 | `1.2.0` | Oynatma çökmesi giderildi, durum senkronizasyonu düzeltildi, hamburger menü + responsive arayüz |
 | `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.4.0 neler değişti?
+
+**Oynatıcı**
+
+- **Tekrar modu:** oynatıcıdaki yeni "Tekrar" düğmesi sırayla *kapalı → tümünü tekrarla → tek şarkıyı tekrarla*
+  arasında dolaşır; kuyruk sonunda liste başına sarılır veya tek şarkı baştan çalar.
+- **Oynatma hızı:** üç nokta menüsünden 0.75x / 1x / 1.25x / 1.5x / 2x seçilebilir; seçim şarkılar
+  arasında ve uygulama yeniden başlasa da korunur.
+- **Uyku zamanlayıcısı:** 15/30/60 dakika seçenekleriyle geri sayım biterken oynatma durur;
+  kalan süre menüde görünür.
+- **Kuyruk yönetimi:** "Sırada" listesindeki her satırda üç nokta menüsü — *Sıradan çıkar*,
+  *Öne al*, *Geri al*. Oynayan satır değişmeden sıra yeniden dizilebilir.
+- **Radyo başlat:** oynatıcıdaki şarkının YouTube'daki ilgili şarkıları çözümlenip kuyruğa
+  eklenir; tek şarkıyla başlayıp benzerlerle devam eder.
+- **Sözler:** LRCLIB (ücretsiz, anahtarsız) üzerinden eş zamanlı veya düz sözler indirilir;
+  alt sayfada aktif satır oynatmayla birlikte vurgulanır ve otomatik kaydırılır.
+- **Kapaktan renk:** oynatıcı arka planı, kapak görselinden Palette ile çıkarılan koyu
+  baskın renge göre boyanır; bulunamazsa mevcut yeşil/violet gradyanı kullanılır.
+
+**Arama**
+
+- **Arama geçmişi:** son 10 arama boş arama alanının altında çip olarak görünür; dokununca
+  yeniden arar, temizleme düğmesi tüm geçmişi siler (Room'da yeni `search_history` tablosu,
+  v1→v2 migration).
+- **Bağlantıdan oynatma:** arama alanına yapıştırılan YouTube / YouTube Music bağlantısı
+  algılanır ve "Bağlantıyı oynat" ile doğrudan çalınır.
+
+**Kütüphane ve veri**
+
+- **Geçmiş sekmesi:** Kütüphane'de yeni dördüncü sekme — son çalınanlar ve en çok dinlenenler
+  (oynatma sayısına göre) ayrı bölümler halinde.
+- **Yedekle / geri yükle:** Ayarlar'dan tüm şarkılar, beğeniler ve çalma listeleri tek JSON
+  dosyası olarak dışa aktarılır ve sistem dosya seçicisiyle geri yüklenir (SAF, izin gerekmez).
+- **Sadece Wi-Fi'da indir:** açıldığında indirme işleri WorkManager kısıtıyla yalnızca
+  ölçülmeyen (Wi-Fi) ağda çalışır; kota altındaki bağlantıda sıra bekler.
+
+**Platform**
+
+- **Ana ekran widget'ı:** çalan şarkı + önceki / oynat-duraklat / sonraki düğmeleri; oynatma
+  durumu değiştikçe anında güncellenir.
+- **Uygulama kısayolları:** uygulama simgesine uzun basınca *Ara*, *Beğenilenler*,
+  *İndirilenler* doğrudan açılır.
+- **Güncelleme kontrolü:** Ayarlar açıkken GitHub Releases sessizce sorgulanır; yeni sürüm
+  varsa sürüm sayfasını açan satır görünür.
+- **Çökme kaydı:** beklenmeyen bir çökme `filesDir/crash.log` dosyasına yazılır; Ayarlar >
+  Tanılama'dan panoya kopyalanabilir.
+
+**Mühendislik**
+
+- **R8 açık:** release derlemede küçültme + kaynak daraltma; NewPipe Extractor ve Rhino için
+  geniş keep kuralları.
+- **kapt → KSP:** Room derleyicisi artık KSP (`2.0.20-1.0.25`) ile derleniyor; derleme belirgin hızlandı.
+- **Birim testleri:** `YouTubeUtils`, `LrcParser`, `ResolvedStream` (URL geçerliliği) ve
+  `UpdateChecker` (sürüm karşılaştırması) saf fonksiyonları test edildi.
+- **GitHub Actions:** her push'ta birim testler + debug APK derlenir; `v*` etiketlerinde APK
+  otomatik olarak GitHub Release'e eklenir.
 
 ### 1.3.0 neler değişti?
 
@@ -107,17 +165,23 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 | --- | --- |
 | Arama (NewPipe → YouTube Music, `music_songs` filtresi) | ✅ |
 | Arama sonuçlarında üç nokta menüsü (beğen, sıraya ekle, indir, listeye ekle) | ✅ |
+| Arama geçmişi çipleri + YouTube bağlantısından doğrudan oynatma | ✅ |
 | Arama satırlarında yükleme / boş / hata durumları | ✅ |
 | Oynatma + kalıcı mini oynatıcı + tam ekran oynatıcı (seek bar) | ✅ |
 | Kuyruk (listeye dokununca liste boyunca oynatma, sonraki/önceki) | ✅ |
-| Kütüphane: Beğenilenler / İndirilenler / Çalma Listeleri | ✅ |
+| Kuyruk yönetimi (çıkar / öne al / geri al) + tekrar modu + oynatma hızı + uyku zamanlayıcısı | ✅ |
+| Radyo (ilgili şarkılarla devam etme) + LRCLIB sözleri + Palette kapak rengi | ✅ |
+| Kütüphane: Beğenilenler / İndirilenler / Çalma Listeleri / Geçmiş | ✅ |
 | Beğeni (like) aç/kapa | ✅ |
-| Çalma listesi: oluştur, yeniden adlandır, sil, şarkı ekle/çıkar, tümünü oynat | ✅ |
-| İndirme: sırada / indiriliyor (yüzde) / tamamlandı / başarısız | ✅ |
+| Çalma listesi: oluştur, yeniden adlandır, sil, şarkı ekle/çıkar, tümünü oynat, tümünü indir | ✅ |
+| Yedekle / geri yükle (SAF ile JSON) | ✅ |
+| İndirme: sırada / indiriliyor (yüzde) / tamamlandı / başarısız + yalnızca Wi-Fi kısıtı | ✅ |
 | Ana sayfa: karşılama, hızlı erişim, son dinlenenler | ✅ |
-| Ayarlar: sürüm, önbellek, indirilenler ve geçmiş temizleme | ✅ |
+| Ana ekran widget'ı + uygulama kısayolları (Ara / Beğenilenler / İndirilenler) | ✅ |
+| Ayarlar: sürüm, depolama, Wi-Fi kısıtı, yedekleme, güncelleme kontrolü, çökme kaydı | ✅ |
 | Arka planda oynatma + medya bildirimi / kilit ekranı kontrolleri | ✅ |
 | Bildirim izni (Android 13+) çalışma zamanı isteği | ✅ |
+| Birim testler + GitHub Actions CI (test + APK derleme + etikette release) | ✅ |
 
 ---
 
@@ -127,11 +191,13 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 - **Mimari:** MVVM (`ViewModel` + `StateFlow`), manuel bağımlılık enjeksiyonu (`AppContainer`), Hilt yok
 - **Oynatma:** AndroidX Media3 (`media3-exoplayer`, `media3-session`, `media3-ui`) + `MediaSessionService`
   (`foregroundServiceType="mediaPlayback"`)
-- **Veri:** Room (şema dışa aktarımı kapalı), Kotlin Flow (LiveData / RxJava yok)
+- **Veri:** Room (şema dışa aktarımı kapalı, **KSP** derleyicisi), Kotlin Flow (LiveData / RxJava yok)
 - **Ağ:** NewPipe Extractor `v0.26.5` (JitPack), kendi `Downloader` implementasyonu OkHttp ile,
-  tarayıcı benzeri `User-Agent`
-- **İndirme:** WorkManager `CoroutineWorker` → uygulamaya özel depolama, durum + ilerleme Room / StateFlow
-- **Görsel:** Coil (Compose)
+  tarayıcı benzeri `User-Agent`; sözler için LRCLIB, güncelleme kontrolü için GitHub Releases API
+- **İndirme:** WorkManager `CoroutineWorker` → uygulamaya özel depolama, durum + ilerleme Room / StateFlow,
+  isteğe bağlı yalnızca Wi-Fi kısıtı
+- **Görsel:** Coil (Compose) + androidx.palette (kapaktan vurgu rengi)
+- **Sürüm yönetimi:** R8 küçültme (release), GitHub Actions CI
 
 ### Sürüm notları (yerel ortama göre)
 
@@ -140,7 +206,8 @@ Bu proje yalnızca yerel makinedeki SDK ile derlenebilir şekilde yapılandırı
 - `compileSdk = 34`, `targetSdk = 34`, `minSdk = 26` (yalnızca `platforms/android-34` ve
   `build-tools/34.0.0` kurulu)
 - AGP `8.6.0`, Gradle `8.10`, Kotlin `2.0.20`, Compose BOM `2024.10.00`
-- Room için **kapt** (KSP değil), Coil `2.7.0` (`io.coil-kt` grubu), WorkManager `2.9.0`
+- Room için **KSP** (`2.0.20-1.0.25`), Coil `2.7.0` (`io.coil-kt` grubu), WorkManager `2.9.0`,
+  Palette `1.0.0`
 
 ---
 

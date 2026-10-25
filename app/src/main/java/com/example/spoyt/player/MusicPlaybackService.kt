@@ -22,6 +22,22 @@ class MusicPlaybackService : MediaSessionService() {
             val builder = MediaSession.Builder(this, PlayerHolder.engine)
             pendingLaunchIntent()?.let { builder.setSessionActivity(it) }
             session = builder.build()
+            // Mirror playback state changes onto the home-screen widget. The widget reads the
+            // PlayerHolder flows, so updating right after the player reports a change is enough.
+            PlayerHolder.engine.addListener(
+                object : androidx.media3.common.Player.Listener {
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        SpoytWidgetProvider.updateAll(applicationContext)
+                    }
+
+                    override fun onMediaItemTransition(
+                        mediaItem: androidx.media3.common.MediaItem?,
+                        reason: Int
+                    ) {
+                        SpoytWidgetProvider.updateAll(applicationContext)
+                    }
+                }
+            )
         } catch (t: Throwable) {
             // A broken media session must not take the whole app down.
             PlaybackEvents.post("Oynatıcı başlatılamadı. Lütfen uygulamayı yeniden açın.")

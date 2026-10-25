@@ -2,4 +2,6 @@ plugins {
     id("com.android.application") version "8.6.0" apply false
     id("org.jetbrains.kotlin.android") version "2.0.20" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.20" apply false
+    // KSP replaces kapt for the Room annotation processor (faster, no Java stubs).
+    id("com.google.devtools.ksp") version "2.0.20-1.0.25" apply false
 }

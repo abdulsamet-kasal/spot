@@ -1,5 +1,6 @@
 package com.example.spoyt.ui.screens
 
+import android.content.Intent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,21 +22,33 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -47,7 +60,9 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +74,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,6 +84,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.spoyt.R
 import com.example.spoyt.data.local.entities.TrackEntity
+import com.example.spoyt.player.RepeatMode
 import com.example.spoyt.ui.components.AddToPlaylistDialog
 import com.example.spoyt.ui.components.SpoytBackground
 import com.example.spoyt.ui.components.Thumbnails
@@ -88,13 +105,40 @@ fun PlayerScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val likedIds by viewModel.likedIds.collectAsStateWithLifecycle()
+    val repeatMode by viewModel.repeatMode.collectAsStateWithLifecycle()
+    val playbackSpeed by viewModel.playbackSpeed.collectAsStateWithLifecycle()
+    val sleepRemainingMs by viewModel.sleepRemainingMs.collectAsStateWithLifecycle()
+    val artworkColor by viewModel.artworkColor.collectAsStateWithLifecycle()
+    val lyricsState by viewModel.lyrics.collectAsStateWithLifecycle()
     val track = state.track
     var queueSheetOpen by remember { mutableStateOf(false) }
     var addToPlaylistVideoId by remember { mutableStateOf<String?>(null) }
+    var lyricsSheetOpen by remember { mutableStateOf(false) }
+    var sleepDialogOpen by remember { mutableStateOf(false) }
+    var speedDialogOpen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
-    SpoytBackground(
-        accent = if (state.isPlaying) SpoytGreen else SpoytViolet
-    ) {
+    fun shareCurrent() {
+        val current = track ?: return
+        runCatching {
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(
+                    Intent.EXTRA_TEXT,
+                    "${current.title} — ${current.artist}\n" +
+                        "https://www.youtube.com/watch?v=${current.videoId}"
+                )
+            }
+            context.startActivity(
+                Intent.createChooser(send, context.getString(R.string.menu_share))
+            )
+        }
+    }
+
+    val accent = artworkColor?.let { Color(it) }
+        ?: (if (state.isPlaying) SpoytGreen else SpoytViolet)
+
+    SpoytBackground(accent = accent) {
         if (track == null) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -133,7 +177,15 @@ fun PlayerScreen(
                             onLikeToggle = { viewModel.toggleLike(track) },
                             onDownload = { viewModel.download(track) },
                             onPlayNext = { viewModel.addToQueue(track) },
-                            onAddToPlaylist = { addToPlaylistVideoId = track.videoId }
+                            onAddToPlaylist = { addToPlaylistVideoId = track.videoId },
+                            onRadio = { viewModel.startRadio() },
+                            onLyrics = {
+                                viewModel.ensureLyrics(track)
+                                lyricsSheetOpen = true
+                            },
+                            onShare = { shareCurrent() },
+                            onSleepTimer = { sleepDialogOpen = true },
+                            onSpeed = { speedDialogOpen = true }
                         )
                         ArtworkBlock(track = track, modifier = Modifier.fillMaxWidth(0.88f))
                     }
@@ -164,16 +216,22 @@ fun PlayerScreen(
                         )
                         ActionRow(
                             liked = liked,
+                            repeatMode = repeatMode,
                             onLikeToggle = { viewModel.toggleLike(track) },
                             onAddToPlaylist = { addToPlaylistVideoId = track.videoId },
                             onDownload = { viewModel.download(track) },
-                            onOpenQueue = { queueSheetOpen = true }
+                            onOpenQueue = { queueSheetOpen = true },
+                            onRepeat = { viewModel.cycleRepeatMode() }
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         QueueList(
                             state = state,
                             upcoming = upcoming,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            onTrackClick = { index -> viewModel.playAt(index) },
+                            onRemove = viewModel::removeFromQueue,
+                            onMoveUp = { index -> viewModel.moveQueueItem(index, index - 1) },
+                            onMoveDown = { index -> viewModel.moveQueueItem(index, index + 1) }
                         )
                     }
                 }
@@ -189,7 +247,15 @@ fun PlayerScreen(
                             onLikeToggle = { viewModel.toggleLike(track) },
                             onDownload = { viewModel.download(track) },
                             onPlayNext = { viewModel.addToQueue(track) },
-                            onAddToPlaylist = { addToPlaylistVideoId = track.videoId }
+                            onAddToPlaylist = { addToPlaylistVideoId = track.videoId },
+                            onRadio = { viewModel.startRadio() },
+                            onLyrics = {
+                                viewModel.ensureLyrics(track)
+                                lyricsSheetOpen = true
+                            },
+                            onShare = { shareCurrent() },
+                            onSleepTimer = { sleepDialogOpen = true },
+                            onSpeed = { speedDialogOpen = true }
                         )
                     }
                     item { ArtworkBlock(track = track) }
@@ -219,10 +285,12 @@ fun PlayerScreen(
                     item {
                         ActionRow(
                             liked = liked,
+                            repeatMode = repeatMode,
                             onLikeToggle = { viewModel.toggleLike(track) },
                             onAddToPlaylist = { addToPlaylistVideoId = track.videoId },
                             onDownload = { viewModel.download(track) },
-                            onOpenQueue = { queueSheetOpen = true }
+                            onOpenQueue = { queueSheetOpen = true },
+                            onRepeat = { viewModel.cycleRepeatMode() }
                         )
                     }
                     if (upcoming.isNotEmpty()) {
@@ -231,7 +299,14 @@ fun PlayerScreen(
                             QueueRow(
                                 track = item,
                                 index = state.currentIndex + 2 + i,
-                                onClick = { viewModel.playAt(state.currentIndex + 1 + i) }
+                                onClick = { viewModel.playAt(state.currentIndex + 1 + i) },
+                                onRemove = { viewModel.removeFromQueue(state.currentIndex + 1 + i) },
+                                onMoveUp = if (i > 0) {
+                                    { viewModel.moveQueueItem(state.currentIndex + 1 + i, state.currentIndex + i) }
+                                } else null,
+                                onMoveDown = if (i < upcoming.lastIndex) {
+                                    { viewModel.moveQueueItem(state.currentIndex + 1 + i, state.currentIndex + 2 + i) }
+                                } else null
                             )
                         }
                     }
@@ -253,10 +328,43 @@ fun PlayerScreen(
                     onTrackClick = { index ->
                         viewModel.playAt(index)
                         queueSheetOpen = false
-                    }
+                    },
+                    onRemove = { index -> viewModel.removeFromQueue(index) },
+                    onMoveUp = { index -> viewModel.moveQueueItem(index, index - 1) },
+                    onMoveDown = { index -> viewModel.moveQueueItem(index, index + 1) }
                 )
             }
         }
+    }
+
+    if (sleepDialogOpen) {
+        SleepTimerDialog(
+            remainingMs = sleepRemainingMs,
+            onSelect = { minutes ->
+                viewModel.startSleepTimer(minutes)
+                sleepDialogOpen = false
+            },
+            onDismiss = { sleepDialogOpen = false }
+        )
+    }
+
+    if (speedDialogOpen) {
+        SpeedDialog(
+            current = playbackSpeed,
+            onSelect = { speed ->
+                viewModel.setSpeed(speed)
+                speedDialogOpen = false
+            },
+            onDismiss = { speedDialogOpen = false }
+        )
+    }
+
+    if (lyricsSheetOpen) {
+        LyricsSheet(
+            state = lyricsState,
+            positionMs = state.positionMs,
+            onDismiss = { lyricsSheetOpen = false }
+        )
     }
 
     addToPlaylistVideoId?.let { videoId ->
@@ -274,7 +382,12 @@ private fun PlayerTopBar(
     onLikeToggle: () -> Unit,
     onDownload: () -> Unit,
     onPlayNext: () -> Unit,
-    onAddToPlaylist: () -> Unit
+    onAddToPlaylist: () -> Unit,
+    onRadio: () -> Unit = {},
+    onLyrics: () -> Unit = {},
+    onShare: () -> Unit = {},
+    onSleepTimer: () -> Unit = {},
+    onSpeed: () -> Unit = {}
 ) {
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -325,6 +438,26 @@ private fun PlayerTopBar(
                     text = stringResource(R.string.menu_download),
                     icon = Icons.Default.Download
                 ) { menuOpen = false; onDownload() }
+                PlayerMenuItem(
+                    text = stringResource(R.string.menu_radio),
+                    icon = Icons.Default.Radio
+                ) { menuOpen = false; onRadio() }
+                PlayerMenuItem(
+                    text = stringResource(R.string.menu_lyrics),
+                    icon = Icons.Default.Lyrics
+                ) { menuOpen = false; onLyrics() }
+                PlayerMenuItem(
+                    text = stringResource(R.string.menu_share),
+                    icon = Icons.Default.Share
+                ) { menuOpen = false; onShare() }
+                PlayerMenuItem(
+                    text = stringResource(R.string.menu_speed),
+                    icon = Icons.Default.Speed
+                ) { menuOpen = false; onSpeed() }
+                PlayerMenuItem(
+                    text = stringResource(R.string.menu_sleep_timer),
+                    icon = Icons.Default.Bedtime
+                ) { menuOpen = false; onSleepTimer() }
             }
         }
     }
@@ -536,19 +669,23 @@ private fun Controls(
     }
 }
 
-/** Secondary actions: like, add to playlist, download and the queue sheet. */
+/** Secondary actions: like, add to playlist, download, queue sheet and repeat. */
 @Composable
 private fun ActionRow(
     liked: Boolean,
+    repeatMode: RepeatMode,
     onLikeToggle: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onDownload: () -> Unit,
-    onOpenQueue: () -> Unit
+    onOpenQueue: () -> Unit,
+    onRepeat: () -> Unit
 ) {
+    val repeatIcon = if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat
+    val repeatActive = repeatMode != RepeatMode.OFF
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 15.dp, vertical = 8.dp),
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -568,6 +705,13 @@ private fun ActionRow(
             icon = Icons.Default.Download,
             label = stringResource(R.string.menu_download),
             onClick = onDownload
+        )
+        SecondaryAction(
+            icon = repeatIcon,
+            label = stringResource(R.string.player_repeat),
+            tint = if (repeatActive) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            onClick = onRepeat
         )
         SecondaryAction(
             icon = Icons.Default.QueueMusic,
@@ -635,7 +779,10 @@ private fun QueueList(
     state: PlayerUiState,
     upcoming: List<TrackEntity>,
     modifier: Modifier = Modifier,
-    onTrackClick: ((Int) -> Unit)? = null
+    onTrackClick: ((Int) -> Unit)? = null,
+    onRemove: ((Int) -> Unit)? = null,
+    onMoveUp: ((Int) -> Unit)? = null,
+    onMoveDown: ((Int) -> Unit)? = null
 ) {
     LazyColumn(modifier = modifier.fillMaxWidth()) {
         item { QueueHeader(count = upcoming.size) }
@@ -650,17 +797,35 @@ private fun QueueList(
             }
         }
         itemsIndexed(upcoming) { i, item ->
+            val absoluteIndex = state.currentIndex + 1 + i
             QueueRow(
                 track = item,
-                index = state.currentIndex + 2 + i,
-                onClick = { onTrackClick?.invoke(state.currentIndex + 1 + i) }
+                index = absoluteIndex + 1,
+                onClick = { onTrackClick?.invoke(absoluteIndex) },
+                onRemove = onRemove?.let { cb -> { cb(absoluteIndex) } },
+                onMoveUp = if (i > 0) {
+                    { onMoveUp?.invoke(absoluteIndex) }
+                } else null,
+                onMoveDown = if (i < upcoming.lastIndex) {
+                    { onMoveDown?.invoke(absoluteIndex) }
+                } else null
             )
         }
     }
 }
 
 @Composable
-private fun QueueRow(track: TrackEntity, index: Int, onClick: () -> Unit) {
+private fun QueueRow(
+    track: TrackEntity,
+    index: Int,
+    onClick: () -> Unit,
+    onRemove: (() -> Unit)? = null,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val hasMenu = onRemove != null || onMoveUp != null || onMoveDown != null
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -692,6 +857,47 @@ private fun QueueRow(track: TrackEntity, index: Int, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis
             )
         }
+        if (hasMenu) {
+            Box {
+                IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = stringResource(R.string.action_more),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    if (onMoveUp != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.queue_move_up)) },
+                            leadingIcon = {
+                                Icon(Icons.Default.ArrowUpward, contentDescription = null)
+                            },
+                            onClick = { menuOpen = false; onMoveUp() }
+                        )
+                    }
+                    if (onMoveDown != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.queue_move_down)) },
+                            leadingIcon = {
+                                Icon(Icons.Default.ArrowDownward, contentDescription = null)
+                            },
+                            onClick = { menuOpen = false; onMoveDown() }
+                        )
+                    }
+                    if (onRemove != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.queue_remove)) },
+                            leadingIcon = {
+                                Icon(Icons.Default.Clear, contentDescription = null)
+                            },
+                            onClick = { menuOpen = false; onRemove() }
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -702,4 +908,159 @@ private fun formatPlayerTime(ms: Long): String {
     val seconds = totalSeconds % 60
     return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds)
     else "%d:%02d".format(minutes, seconds)
+}
+
+/** Sleep timer picker: preset durations + "off". */
+@Composable
+private fun SleepTimerDialog(
+    remainingMs: Long,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val remainingLabel = if (remainingMs > 0) {
+        stringResource(R.string.sleep_active, formatPlayerTime(remainingMs))
+    } else null
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.sleep_title)) },
+        text = {
+            Column {
+                remainingLabel?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                listOf(15, 30, 60).forEach { minutes ->
+                    TextButton(onClick = { onSelect(minutes) }) {
+                        Text(stringResource(R.string.sleep_minutes, minutes))
+                    }
+                }
+                TextButton(onClick = { onSelect(0) }) {
+                    Text(stringResource(R.string.sleep_off))
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+/** Playback speed picker. */
+@Composable
+private fun SpeedDialog(
+    current: Float,
+    onSelect: (Float) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val options = listOf(0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.speed_title)) },
+        text = {
+            Column {
+                options.forEach { speed ->
+                    TextButton(onClick = { onSelect(speed) }) {
+                        Text(
+                            text = "${speed}x",
+                            color = if (speed == current) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+/**
+ * Lyrics sheet: synced lines follow the playback position; plain lyrics are shown as text.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LyricsSheet(
+    state: com.example.spoyt.ui.viewmodel.LyricsUiState,
+    positionMs: Long,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(480.dp)
+                .padding(horizontal = 20.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.lyrics_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+            when {
+                state.loading -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                state.notFound || (state.synced.isEmpty() && state.plain == null) -> {
+                    Text(
+                        text = stringResource(R.string.lyrics_not_found),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 24.dp)
+                    )
+                }
+
+                state.synced.isNotEmpty() -> {
+                    val activeIndex = state.synced.indexOfLast { it.timeMs <= positionMs }
+                    val listState = rememberLazyListState()
+                    LaunchedEffect(activeIndex) {
+                        if (activeIndex >= 0) {
+                            runCatching { listState.animateScrollToItem(activeIndex) }
+                        }
+                    }
+                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                        itemsIndexed(state.synced) { i, line ->
+                            val active = i == activeIndex
+                            Text(
+                                text = line.text,
+                                style = if (active) MaterialTheme.typography.titleMedium
+                                else MaterialTheme.typography.bodyLarge,
+                                color = if (active) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+
+                else -> {
+                    Text(
+                        text = state.plain.orEmpty(),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+    }
 }

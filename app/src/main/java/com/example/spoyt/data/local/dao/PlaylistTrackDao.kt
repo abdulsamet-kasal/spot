@@ -31,11 +31,11 @@ interface PlaylistTrackDao {
     """)
     fun getTracksInPlaylist(playlistId: Int): Flow<List<TrackEntity>>
 
-    @Query("""
-        SELECT pt.videoId FROM playlist_tracks pt WHERE pt.playlistId = :playlistId
-        ORDER BY pt.position ASC
-    """)
+    @Query("SELECT pt.videoId FROM playlist_tracks pt WHERE pt.playlistId = :playlistId ORDER BY pt.position ASC")
     suspend fun getVideoIdsInPlaylist(playlistId: Int): List<String>
+
+    @Query("SELECT * FROM playlist_tracks")
+    suspend fun getAllCrossRefs(): List<PlaylistTrackCrossRef>
 
     @Query("SELECT COUNT(*) FROM playlist_tracks WHERE videoId = :videoId")
     suspend fun isInAnyPlaylist(videoId: String): Boolean

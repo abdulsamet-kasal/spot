@@ -32,6 +32,10 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Long-press app shortcuts (search / liked / downloads). -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <!-- MediaSessionService keeps playback alive in the background and publishes the
@@ -46,6 +50,18 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+
+        <!-- Home screen widget: current track + play/pause/next/prev transport buttons. -->
+        <receiver
+            android:name=".player.SpoytWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/spoyt_widget_info" />
+        </receiver>
 
     </application>
 

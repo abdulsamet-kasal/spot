@@ -40,6 +40,14 @@
     <string name="search_hint">Şarkı veya sanatçı ara\u2026</string>
     <string name="search_no_results">Sonuç bulunamadı</string>
     <string name="search_error">Arama sırasında hata oluştu</string>
+    <string name="search_recent">Son aramalar</string>
+    <string name="search_clear_history">Arama geçmişini temizle</string>
+    <string name="search_play_link">Bağlantıyı oynat</string>
+
+    <!-- App shortcuts -->
+    <string name="shortcut_search">Ara</string>
+    <string name="shortcut_liked">Beğenilenler</string>
+    <string name="shortcut_downloads">İndirilenler</string>
 
     <!-- Player / mini player -->
     <string name="player_title">Oynatıcı</string>
@@ -62,6 +70,27 @@
     <string name="menu_download">İndir</string>
     <string name="menu_downloaded">İndirildi</string>
     <string name="menu_delete_from_playlist">Listeden kaldır</string>
+    <string name="menu_radio">Radyo başlat</string>
+    <string name="menu_lyrics">Sözleri göster</string>
+    <string name="menu_share">Paylaş</string>
+    <string name="menu_sleep_timer">Uyku zamanlayıcısı</string>
+    <string name="menu_speed">Oynatma hızı</string>
+
+    <!-- Player: repeat / speed / sleep / lyrics -->
+    <string name="player_repeat">Tekrar</string>
+    <string name="player_repeat_off">Tekrar kapalı</string>
+    <string name="player_repeat_all">Tümünü tekrarla</string>
+    <string name="player_repeat_one">Tek şarkıyı tekrarla</string>
+    <string name="sleep_title">Uyku zamanlayıcısı</string>
+    <string name="sleep_off">Kapalı</string>
+    <string name="sleep_minutes">%1$d dakika</string>
+    <string name="sleep_active">%1$s kaldı</string>
+    <string name="speed_title">Oynatma hızı</string>
+    <string name="lyrics_title">Sözler</string>
+    <string name="lyrics_not_found">Bu şarkı için söz bulunamadı.</string>
+    <string name="queue_remove">Sıradan çıkar</string>
+    <string name="queue_move_up">Öne al</string>
+    <string name="queue_move_down">Geri al</string>
 
     <!-- Download states (shown on rows) -->
     <string name="download_queued">Sırada</string>
@@ -75,6 +104,11 @@
     <string name="library_liked">Beğenilen Şarkılar</string>
     <string name="library_downloads">İndirilenler</string>
     <string name="library_playlists">Çalma Listeleri</string>
+    <string name="library_history">Geçmiş</string>
+    <string name="history_recent">Son çalınanlar</string>
+    <string name="history_top">En çok dinlenenler</string>
+    <string name="history_empty">Henüz geçmiş yok</string>
+    <string name="history_empty_subtitle">Dinlediğin şarkılar burada birikir.</string>
     <string name="library_empty_liked">Henüz beğenilen şarkı yok</string>
     <string name="library_empty_downloads">Henüz indirilen şarkı yok</string>
     <string name="library_empty_playlists">Henüz çalma listesi yok</string>
@@ -88,6 +122,7 @@
     <string name="playlist_create">Yeni liste oluştur</string>
     <string name="playlist_name_hint">Liste adı</string>
     <string name="playlist_play_all">Tümünü oynat</string>
+    <string name="playlist_download_all">Tümünü indir</string>
     <string name="playlist_rename">Yeniden adlandır</string>
     <string name="playlist_delete">Sil</string>
     <string name="playlist_empty">Bu listedeki şarkı yok</string>
@@ -100,9 +135,24 @@
     <string name="settings_clear_history">Dinleme geçmişini temizle</string>
     <string name="settings_cache_size">Önbellek boyutu</string>
     <string name="settings_storage">Depolama</string>
+    <string name="settings_download">İndirme</string>
     <string name="settings_clear_downloads">İndirilenleri sil</string>
     <string name="settings_clear_downloads_desc">Tüm indirilen dosyaları siler</string>
     <string name="settings_downloads_size">İndirilenler boyutu</string>
+    <string name="settings_wifi_only">Sadece Wi-Fi\'da indir</string>
+    <string name="settings_wifi_only_desc">İndirmeler yalnızca kablosuz ağda yapılır</string>
+    <string name="settings_backup_group">Yedekleme</string>
+    <string name="settings_backup">Yedeğe kaydet</string>
+    <string name="settings_backup_desc">Şarkılar ve çalma listeleri JSON olarak dışa aktarılır</string>
+    <string name="settings_restore">Yedekten geri yükle</string>
+    <string name="settings_restore_desc">Bir yedek dosyası seç ve içe aktar</string>
+    <string name="settings_update_group">Güncelleme</string>
+    <string name="settings_update_check">Güncellemeleri kontrol et</string>
+    <string name="settings_update_available">Yeni sürüm var: %1$s</string>
+    <string name="settings_update_open">Aç</string>
+    <string name="settings_diagnostics">Tanılama</string>
+    <string name="settings_crash_log">Hata kaydını kopyala</string>
+    <string name="settings_crash_log_desc">Son çökme raporunu panoya kopyalar</string>
     <string name="settings_about">Uygulama</string>
     <string name="settings_legal">Kişisel kullanım için geliştirildi. Hesap, reklam ve izleme yok.</string>
 
@@ -117,6 +167,9 @@
     <string name="action_more">Diğer seçenekler</string>
     <string name="action_search">Ara</string>
     <string name="action_play_all">Tümünü oynat</string>
+    <string name="action_open">Aç</string>
+    <string name="action_refresh">Kontrol et</string>
+    <string name="action_copy">Kopyala</string>
 
     <!-- Errors -->
     <string name="error_generic">Bir sorun oluştu. Tekrar deneyin.</string>

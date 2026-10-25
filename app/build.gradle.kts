@@ -1,7 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.kapt")
+    id("com.google.devtools.ksp")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -13,16 +13,17 @@ android {
         applicationId = "com.example.spoyt"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.3.0"
-        // Keep NewPipe's model classes and the OkHttp/coil dependencies through R8.
+        versionCode = 6
+        versionName = "1.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // R8 shrinking: the APK gets much smaller and NewPipe/Rhino need the keep rules
+            // in proguard-rules.pro (reflection-heavy JS signature deciphering).
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -87,13 +88,16 @@ dependencies {
     // Room (local database)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
-    kapt(libs.androidx.room.compiler)
+    ksp(libs.androidx.room.compiler)
 
     // WorkManager (downloads)
     implementation(libs.androidx.work.runtime.ktx)
 
     // Coil (image loading for Compose)
     implementation(libs.coil.compose)
+
+    // Palette (extract a dark accent color from the artwork for the player background)
+    implementation(libs.androidx.palette)
 
     // OkHttp (used by the NewPipe Downloader implementation)
     implementation(libs.okhttp)

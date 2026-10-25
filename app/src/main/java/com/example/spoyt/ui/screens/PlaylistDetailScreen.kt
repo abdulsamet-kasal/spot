@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
@@ -114,6 +115,14 @@ fun PlaylistDetailScreen(
                         )
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.playlist_download_all)) },
+                            leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
+                            onClick = {
+                                menuOpen = false
+                                viewModel.downloadAll()
+                            }
+                        )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.playlist_rename)) },
                             leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },

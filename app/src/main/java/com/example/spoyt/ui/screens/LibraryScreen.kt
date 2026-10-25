@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
@@ -36,6 +37,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -73,12 +75,24 @@ fun LibraryScreen(
     val allTracks by viewModel.allTracks.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val recentTracks by viewModel.recentTracks.collectAsStateWithLifecycle()
+    val topTracks by viewModel.topTracks.collectAsStateWithLifecycle()
     val progressMap by Downloads.progress.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var newPlaylistName by remember { mutableStateOf("") }
     var addToPlaylistVideoId by remember { mutableStateOf<String?>(null) }
+
+    // App shortcuts may request a specific tab ("Beğenilenler", "İndirilenler").
+    LaunchedEffect(Unit) {
+        com.example.spoyt.ui.nav.UiRequests.libraryTab.collect { tab ->
+            if (tab >= 0) {
+                selectedTab = tab
+                com.example.spoyt.ui.nav.UiRequests.libraryTab.value = -1
+            }
+        }
+    }
 
     SpoytBackground {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -118,7 +132,8 @@ fun LibraryScreen(
                 labels = listOf(
                     stringResource(R.string.library_liked),
                     stringResource(R.string.library_downloads),
-                    stringResource(R.string.library_playlists)
+                    stringResource(R.string.library_playlists),
+                    stringResource(R.string.library_history)
                 )
             )
 
@@ -151,11 +166,24 @@ fun LibraryScreen(
                         onAddToPlaylist = { addToPlaylistVideoId = it }
                     )
 
-                    else -> PlaylistsTab(
+                    2 -> PlaylistsTab(
                         playlists = playlists,
                         onCreate = { newPlaylistName = ""; showCreateDialog = true },
                         onOpen = onOpenPlaylist,
                         onDelete = viewModel::deletePlaylist
+                    )
+
+                    else -> HistoryTab(
+                        recent = recentTracks,
+                        top = topTracks,
+                        onPlay = { tracks, index ->
+                            viewModel.play(tracks, index)
+                            onOpenPlayer()
+                        },
+                        onLikeToggle = viewModel::toggleLike,
+                        onDownload = viewModel::download,
+                        onPlayNext = viewModel::addToQueue,
+                        onAddToPlaylist = { addToPlaylistVideoId = it }
                     )
                 }
             }
@@ -411,5 +439,68 @@ private fun CountLabel(text: String) {
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(start = 20.dp, top = 10.dp, bottom = 4.dp)
+    )
+}
+
+/** "Geçmiş" tab: recent listens and most played, each section playable. */
+@Composable
+private fun HistoryTab(
+    recent: List<TrackEntity>,
+    top: List<TrackEntity>,
+    onPlay: (List<TrackEntity>, Int) -> Unit,
+    onLikeToggle: (TrackEntity) -> Unit,
+    onDownload: (TrackEntity) -> Unit,
+    onPlayNext: (TrackEntity) -> Unit,
+    onAddToPlaylist: (String) -> Unit
+) {
+    if (recent.isEmpty() && top.isEmpty()) {
+        EmptyState(
+            icon = Icons.Default.History,
+            title = stringResource(R.string.history_empty),
+            subtitle = stringResource(R.string.history_empty_subtitle)
+        )
+        return
+    }
+
+    LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 28.dp)) {
+        if (recent.isNotEmpty()) {
+            item { SectionLabel(stringResource(R.string.history_recent)) }
+            itemsIndexed(recent) { index, track ->
+                TrackRow(
+                    track = track,
+                    modifier = Modifier.padding(horizontal = 10.dp),
+                    onClick = { onPlay(recent, index) },
+                    onLikeToggle = { onLikeToggle(track) },
+                    onDownload = { onDownload(track) },
+                    onPlayNext = { onPlayNext(track) },
+                    onAddToPlaylist = { onAddToPlaylist(track.videoId) }
+                )
+            }
+        }
+        if (top.isNotEmpty()) {
+            item { SectionLabel(stringResource(R.string.history_top)) }
+            itemsIndexed(top) { index, track ->
+                TrackRow(
+                    track = track,
+                    modifier = Modifier.padding(horizontal = 10.dp),
+                    index = index,
+                    onClick = { onPlay(top, index) },
+                    onLikeToggle = { onLikeToggle(track) },
+                    onDownload = { onDownload(track) },
+                    onPlayNext = { onPlayNext(track) },
+                    onAddToPlaylist = { onAddToPlaylist(track.videoId) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 2.dp)
     )
 }

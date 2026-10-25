@@ -7,12 +7,16 @@ import com.example.spoyt.data.local.repositories.DefaultDownloadRepository
 import com.example.spoyt.data.local.repositories.DefaultHistoryRepository
 import com.example.spoyt.data.local.repositories.DefaultPlaylistRepository
 import com.example.spoyt.data.local.repositories.DefaultPlaylistTrackRepository
+import com.example.spoyt.data.local.repositories.DefaultSearchHistoryRepository
 import com.example.spoyt.data.local.repositories.DefaultTrackRepository
 import com.example.spoyt.data.local.repositories.DownloadRepository
 import com.example.spoyt.data.local.repositories.HistoryRepository
 import com.example.spoyt.data.local.repositories.PlaylistRepository
 import com.example.spoyt.data.local.repositories.PlaylistTrackRepository
+import com.example.spoyt.data.local.repositories.SearchHistoryRepository
 import com.example.spoyt.data.local.repositories.TrackRepository
+import com.example.spoyt.data.prefs.AppPrefs
+import com.example.spoyt.data.remote.LyricsClient
 import com.example.spoyt.data.remote.YoutubeSource
 import com.example.spoyt.player.MusicPlaybackService
 import com.example.spoyt.player.PlaybackController
@@ -30,8 +34,10 @@ object AppContainer {
     private var playlistTrackRepository: PlaylistTrackRepository? = null
     private var downloadRepository: DownloadRepository? = null
     private var historyRepository: HistoryRepository? = null
+    private var searchHistoryRepository: SearchHistoryRepository? = null
     private var youtubeSource: YoutubeSource? = null
     private var playbackController: PlaybackController? = null
+    private var lyricsClient: LyricsClient? = null
 
     fun init(context: Context) {
         val app = context.applicationContext
@@ -39,13 +45,16 @@ object AppContainer {
         // must not throw away the live controllers.
         if (appContext === app && database != null) return
         appContext = app
+        AppPrefs.init(app)
         database = AppDatabase.getInstance(app)
         trackRepository = DefaultTrackRepository(database!!)
         playlistRepository = DefaultPlaylistRepository(database!!)
         playlistTrackRepository = DefaultPlaylistTrackRepository(database!!)
         downloadRepository = DefaultDownloadRepository(database!!)
         historyRepository = DefaultHistoryRepository(database!!)
+        searchHistoryRepository = DefaultSearchHistoryRepository(database!!)
         youtubeSource = YoutubeSource()
+        lyricsClient = LyricsClient()
         playbackController = PlaybackController(
             trackRepository = trackRepository!!,
             downloads = downloadRepository!!,
@@ -74,6 +83,12 @@ object AppContainer {
 
     val history: HistoryRepository
         get() = historyRepository ?: error("AppContainer not initialized")
+
+    val searchHistory: SearchHistoryRepository
+        get() = searchHistoryRepository ?: error("AppContainer not initialized")
+
+    val lyrics: LyricsClient
+        get() = lyricsClient ?: error("AppContainer not initialized")
 
     val youtube: YoutubeSource
         get() = youtubeSource ?: error("AppContainer not initialized")

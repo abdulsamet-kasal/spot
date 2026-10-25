@@ -20,6 +20,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -48,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.spoyt.R
+import com.example.spoyt.data.remote.YouTubeUtils
 import com.example.spoyt.download.Downloads
 import com.example.spoyt.ui.components.AddToPlaylistDialog
 import com.example.spoyt.ui.components.EmptyState
@@ -66,6 +69,7 @@ fun SearchScreen(
     val progressMap by Downloads.progress.collectAsStateWithLifecycle()
     val likedIds by viewModel.likedIds.collectAsStateWithLifecycle()
     val downloadStates by viewModel.downloadStates.collectAsStateWithLifecycle()
+    val recentQueries by viewModel.recentQueries.collectAsStateWithLifecycle()
     var addToPlaylistVideoId by remember { mutableStateOf<String?>(null) }
     val keyboard = LocalSoftwareKeyboardController.current
 
@@ -100,6 +104,27 @@ fun SearchScreen(
                 },
                 onClear = { viewModel.onQueryChange("") }
             )
+
+            if (YouTubeUtils.looksLikeLink(state.query)) {
+                LinkPlayRow(
+                    onPlay = {
+                        keyboard?.hide()
+                        viewModel.playFromUrl(onReady = onOpenPlayer)
+                    }
+                )
+            }
+
+            // Empty field: show past queries as quick chips (with a clear action).
+            if (state.query.isBlank() && !state.loading && recentQueries.isNotEmpty()) {
+                RecentQueriesRow(
+                    queries = recentQueries,
+                    onSelect = { query ->
+                        viewModel.onQueryChange(query)
+                        viewModel.searchNow()
+                    },
+                    onClear = { viewModel.clearSearchHistory() }
+                )
+            }
 
             if (state.results.isNotEmpty()) {
                 ResultsHeader(
@@ -271,4 +296,87 @@ private fun ResultsHeader(count: Int, onPlayAll: () -> Unit) {
         }
     }
     Spacer(modifier = Modifier.height(2.dp))
+}
+
+/** Shown when the search field contains a YouTube link: play it directly. */
+@Composable
+private fun LinkPlayRow(onPlay: () -> Unit) {
+    Surface(
+        onClick = onPlay,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Link,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = stringResource(R.string.search_play_link),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+/** Past search queries as tappable chips, plus a clear-history action. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun RecentQueriesRow(
+    queries: List<String>,
+    onSelect: (String) -> Unit,
+    onClear: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.search_recent),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = onClear, modifier = Modifier.size(30.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = stringResource(R.string.search_clear_history),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            queries.forEach { query ->
+                Surface(
+                    onClick = { onSelect(query) },
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    Text(
+                        text = query,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        }
+    }
 }

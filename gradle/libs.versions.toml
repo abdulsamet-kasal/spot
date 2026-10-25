@@ -24,6 +24,7 @@ androidxWork = "2.9.0"
 coil = "2.7.0"
 okhttp = "4.12.0"
 newPipeExtractor = "v0.26.5"
+palette = "1.0.0"
 
 [libraries]
 # Android Gradle Plugin
@@ -72,6 +73,9 @@ junit = { group = "junit", name = "junit", version = "4.13.2" }
 
 # Coil (image loading for Compose)
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+
+# Palette (artwork color extraction for the player background)
+androidx-palette = { group = "androidx.palette", name = "palette-ktx", version.ref = "palette" }
 
 # OkHttp (used by the NewPipe Downloader implementation)
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }

@@ -20,13 +20,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Queue repeat behaviour, owned by the app (ExoPlayer only ever plays one item). */
+enum class RepeatMode { OFF, ALL, ONE }
+
 /**
  * Holds the ExoPlayer instance and the playback state shared across the app.
  *
  * Responsibilities:
  *   - Own a single ExoPlayer (single-activity app, background playback).
  *   - Expose current track, queue, index, and play/pause state as StateFlows.
- *   - Provide queue operations (play a track, play a list, next, previous).
+ *   - Provide queue operations (play a track, play a list, next, previous, reorder).
  *
  * Stream URLs are resolved lazily: when a track becomes current and no source is known yet,
  * [onSourceMissing] is invoked so the controller can resolve it and call [reloadCurrent].
@@ -53,6 +56,8 @@ object PlayerHolder {
     private val _currentIndex = MutableStateFlow(0)
     private val _isPlaying = MutableStateFlow(false)
     private val _isBuffering = MutableStateFlow(false)
+    private val _repeatMode = MutableStateFlow(RepeatMode.OFF)
+    private val _playbackSpeed = MutableStateFlow(1.0f)
 
     /** Read-only exposures for the UI layer. */
     val currentTrackState: StateFlow<TrackEntity?> = _currentTrack.asStateFlow()
@@ -60,6 +65,8 @@ object PlayerHolder {
     val currentIndexState: StateFlow<Int> = _currentIndex.asStateFlow()
     val isPlayingState: StateFlow<Boolean> = _isPlaying.asStateFlow()
     val isBufferingState: StateFlow<Boolean> = _isBuffering.asStateFlow()
+    val repeatModeState: StateFlow<RepeatMode> = _repeatMode.asStateFlow()
+    val playbackSpeedState: StateFlow<Float> = _playbackSpeed.asStateFlow()
 
     /** Set by [PlaybackController]: the current track has no playable source yet. */
     var onSourceMissing: ((TrackEntity) -> Unit)? = null
@@ -127,6 +134,13 @@ object PlayerHolder {
                 /* handleAudioFocus = */ true
             )
 
+            // PlaybackParameters survive per-item swaps but not a player rebuild (the media
+            // service may have released the previous engine), so re-apply the saved speed.
+            val speed = _playbackSpeed.value
+            if (speed != 1.0f) {
+                runCatching { p.playbackParameters = androidx.media3.common.PlaybackParameters(speed) }
+            }
+
             p.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     _isPlaying.value = isPlaying
@@ -143,7 +157,6 @@ object PlayerHolder {
                         Player.STATE_ENDED -> playNext()
                     }
                 }
-
                 override fun onPlayerError(error: PlaybackException) {
                     _isPlaying.value = false
                     _isBuffering.value = false
@@ -249,8 +262,21 @@ object PlayerHolder {
         runOnMain {
             val q = _queue.value
             if (q.isEmpty()) return@runOnMain
+
+            // Repeat-one replays the current track without advancing.
+            if (_repeatMode.value == RepeatMode.ONE) {
+                exoPlayer?.seekTo(0)
+                playIndex(_currentIndex.value)
+                return@runOnMain
+            }
+
             val next = _currentIndex.value + 1
             if (next > q.lastIndex) {
+                if (_repeatMode.value == RepeatMode.ALL) {
+                    // Wrap around to the beginning of the queue.
+                    playIndex(0)
+                    return@runOnMain
+                }
                 // End of queue: stop instead of silently restarting the last track.
                 exoPlayer?.let {
                     it.pause()
@@ -285,6 +311,61 @@ object PlayerHolder {
             } else {
                 if (p.playbackState == Player.STATE_IDLE) start() else p.play()
             }
+        }
+    }
+
+    /** Pause without toggling (used by the sleep timer). */
+    fun pause() {
+        runOnMain { runCatching { exoPlayer?.pause() } }
+    }
+
+    /** Cycles OFF -> ALL -> ONE -> OFF. */
+    fun cycleRepeatMode() {
+        _repeatMode.value = when (_repeatMode.value) {
+            RepeatMode.OFF -> RepeatMode.ALL
+            RepeatMode.ALL -> RepeatMode.ONE
+            RepeatMode.ONE -> RepeatMode.OFF
+        }
+    }
+
+    /** Sets the playback speed (0.5x..2x range enforced by the UI). */
+    fun setSpeed(speed: Float) {
+        val clamped = speed.coerceIn(0.5f, 2.5f)
+        _playbackSpeed.value = clamped
+        runOnMain {
+            runCatching {
+                exoPlayer?.playbackParameters =
+                    androidx.media3.common.PlaybackParameters(clamped)
+            }
+        }
+    }
+
+    /** Removes an upcoming track from the queue (the playing row itself is not touchable). */
+    fun removeFromQueue(index: Int) {
+        val q = _queue.value.toMutableList()
+        if (index !in q.indices) return
+        q.removeAt(index)
+        _queue.value = q
+        if (index < _currentIndex.value) {
+            _currentIndex.value = (_currentIndex.value - 1).coerceAtLeast(0)
+        }
+    }
+
+    /** Moves a queue row (drag-free reorder used by the queue sheet). */
+    fun moveInQueue(from: Int, to: Int) {
+        if (from == to) return
+        val q = _queue.value.toMutableList()
+        if (from !in q.indices || to !in q.indices) return
+        val item = q.removeAt(from)
+        q.add(to, item)
+        _queue.value = q
+        // Keep the playing row pointing at the same track after the shift.
+        val cur = _currentIndex.value
+        _currentIndex.value = when {
+            cur == from -> to
+            from < cur && to >= cur -> cur - 1
+            from > cur && to <= cur -> cur + 1
+            else -> cur
         }
     }
 

@@ -13,4 +13,5 @@ interface PlaylistTrackRepository {
     fun getTracksInPlaylist(playlistId: Int): Flow<List<TrackEntity>>
     suspend fun getVideoIdsInPlaylist(playlistId: Int): List<String>
     suspend fun isInAnyPlaylist(videoId: String): Boolean
+    suspend fun getAllCrossRefs(): List<PlaylistTrackCrossRef>
 }

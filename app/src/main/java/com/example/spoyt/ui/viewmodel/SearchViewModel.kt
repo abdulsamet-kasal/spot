@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.spoyt.data.local.entities.TrackEntity
 import com.example.spoyt.data.remote.SearchResult
+import com.example.spoyt.data.remote.YouTubeUtils
 import com.example.spoyt.di.AppContainer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -47,6 +48,11 @@ class SearchViewModel : ViewModel() {
         .map { list -> list.associate { it.videoId to it.state } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    /** Past queries shown as tappable chips when the search field is empty. */
+    val recentQueries: StateFlow<List<String>> = AppContainer.searchHistory.getRecent(10)
+        .map { list -> list.map { it.query } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     private var searchJob: Job? = null
 
     /** Debounced search: fires ~400ms after the user stops typing. */
@@ -83,6 +89,11 @@ class SearchViewModel : ViewModel() {
             return
         }
 
+        // Record the query so it comes back as a chip later (only on successful searches).
+        if (results.isNotEmpty()) {
+            runCatching { withContext(Dispatchers.IO) { AppContainer.searchHistory.record(query) } }
+        }
+
         // Persist results so playlists/likes/downloads can reference them later.
         // Only insert missing rows: saveTracks() would REPLACE existing rows with these
         // fresh snapshots and wipe their liked flag (a real state-sync bug).
@@ -116,6 +127,31 @@ class SearchViewModel : ViewModel() {
         val results = _uiState.value.results
         if (results.isEmpty()) return
         viewModelScope.playTracks(results.map { it.toTrackEntity() }, 0)
+    }
+
+    /**
+     * The search field holds a YouTube link: resolve its metadata and play it directly,
+     * replacing the queue (like tapping a single search result would).
+     */
+    fun playFromUrl(onReady: () -> Unit = {}) {
+        val videoId = YouTubeUtils.extractVideoId(_uiState.value.query.trim()) ?: return
+        viewModelScope.launch {
+            runCatching {
+                val result = withContext(Dispatchers.IO) { AppContainer.youtube.trackFor(videoId) }
+                if (result == null) {
+                    _uiState.update { it.copy(error = "Bu bağlantıdan şarkı alınamadı.") }
+                } else {
+                    AppContainer.playback.play(result.toTrackEntity())
+                    onReady()
+                }
+            }
+        }
+    }
+
+    fun clearSearchHistory() {
+        viewModelScope.launch {
+            runCatching { AppContainer.searchHistory.clearAll() }
+        }
     }
 
     fun toggleLike(videoId: String) {

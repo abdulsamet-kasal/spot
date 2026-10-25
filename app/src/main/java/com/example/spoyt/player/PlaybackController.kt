@@ -228,6 +228,43 @@ class PlaybackController(
         }
     }
 
+    /**
+     * Starts a "radio" seeded by [seed]: the seed track plus related tracks resolved from
+     * YouTube. Returns false (with no queue change) when nothing related could be resolved.
+     */
+    suspend fun startRadio(seed: TrackEntity): Boolean {
+        ensurePlayer()
+        val related = withContext(Dispatchers.IO) {
+            runCatching { youtube.related(seed.videoId) }.getOrNull()
+        }.orEmpty()
+
+        val seedEntity = runCatching { trackRepository.getTrack(seed.videoId) }.getOrNull() ?: seed
+        val radioTracks = buildList {
+            add(seedEntity)
+            related.forEach { result ->
+                if (result.videoId != seedEntity.videoId) {
+                    add(
+                        TrackEntity(
+                            videoId = result.videoId,
+                            title = result.title,
+                            artist = result.artist,
+                            durationSeconds = result.durationSeconds,
+                            thumbnailUrl = result.thumbnailUrl
+                        )
+                    )
+                }
+            }
+        }
+
+        // Persist the radio tracks so likes/downloads can reference them later (play() does
+        // this too, but only for the tracks it is given).
+        val ok = play(radioTracks, 0)
+        if (ok) {
+            PlaybackEvents.post("Radyo başlatıldı: ${seedEntity.title}")
+        }
+        return ok
+    }
+
     /** Toggles the liked flag for [track] and returns the new value. */
     suspend fun toggleLike(track: TrackEntity): Boolean {
         // Read the current value from Room instead of trusting the caller's (possibly stale)

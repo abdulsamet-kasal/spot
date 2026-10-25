@@ -36,4 +36,6 @@ class DefaultPlaylistTrackRepository(private val database: AppDatabase) : Playli
         dao.getVideoIdsInPlaylist(playlistId)
 
     override suspend fun isInAnyPlaylist(videoId: String): Boolean = dao.isInAnyPlaylist(videoId)
+
+    override suspend fun getAllCrossRefs(): List<PlaylistTrackCrossRef> = dao.getAllCrossRefs()
 }

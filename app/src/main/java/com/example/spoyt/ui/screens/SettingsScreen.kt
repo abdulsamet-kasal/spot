@@ -1,5 +1,8 @@
 package com.example.spoyt.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,17 +20,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,10 +58,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.spoyt.R
+import com.example.spoyt.data.remote.UpdateChecker
 import com.example.spoyt.ui.components.SpoytBackground
 import com.example.spoyt.ui.theme.SpoytGreen
 import com.example.spoyt.ui.theme.SpoytViolet
 import com.example.spoyt.ui.viewmodel.SettingsViewModel
+import kotlinx.coroutines.delay
 
 @Composable
 fun SettingsScreen(
@@ -64,7 +76,28 @@ fun SettingsScreen(
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showClearDownloadsDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { viewModel.load(context) }
+    // Backup files go through the system file picker (SAF): no storage permissions needed.
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? -> uri?.let { viewModel.exportBackup(context, it) } }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? -> uri?.let { viewModel.importBackup(context, it) } }
+
+    LaunchedEffect(Unit) {
+        viewModel.load(context)
+        // Quiet update check while the user is on this screen; failures are silent.
+        viewModel.checkForUpdates()
+    }
+
+    // Show each status message for a few seconds, then clear it.
+    LaunchedEffect(state.message) {
+        if (state.message != null) {
+            delay(3_500)
+            viewModel.consumeMessage()
+        }
+    }
 
     SpoytBackground(accent = SpoytViolet) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -122,6 +155,78 @@ fun SettingsScreen(
                         actionLabel = stringResource(R.string.action_delete),
                         onAction = { showClearHistoryDialog = true }
                     )
+                }
+
+                Group(title = stringResource(R.string.settings_backup_group)) {
+                    SettingRow(
+                        icon = Icons.Default.Backup,
+                        title = stringResource(R.string.settings_backup),
+                        subtitle = stringResource(R.string.settings_backup_desc),
+                        actionLabel = stringResource(R.string.action_save),
+                        onAction = { runCatching { exportLauncher.launch("spoyt-yedek.json") } }
+                    )
+                    Divider()
+                    SettingRow(
+                        icon = Icons.Default.Restore,
+                        title = stringResource(R.string.settings_restore),
+                        subtitle = stringResource(R.string.settings_restore_desc),
+                        actionLabel = stringResource(R.string.action_open),
+                        onAction = { runCatching { importLauncher.launch(arrayOf("application/json")) } }
+                    )
+                }
+
+                Group(title = stringResource(R.string.settings_update_group)) {
+                    val updateAvailable = state.updateAvailable
+                    if (updateAvailable != null) {
+                        SettingRow(
+                            icon = Icons.Default.SystemUpdate,
+                            title = stringResource(R.string.settings_update_available, updateAvailable),
+                            actionLabel = stringResource(R.string.settings_update_open),
+                            onAction = {
+                                runCatching {
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(UpdateChecker.RELEASES_URL))
+                                    context.startActivity(intent)
+                                }
+                            }
+                        )
+                        Divider()
+                    }
+                    SettingRow(
+                        icon = Icons.Default.SystemUpdate,
+                        title = stringResource(R.string.settings_update_check),
+                        subtitle = stringResource(R.string.settings_version) + " " + state.versionName,
+                        actionLabel = stringResource(R.string.action_refresh),
+                        onAction = { viewModel.checkForUpdates() }
+                    )
+                }
+
+                Group(title = stringResource(R.string.settings_download)) {
+                    SettingRow(
+                        icon = Icons.Default.Wifi,
+                        title = stringResource(R.string.settings_wifi_only),
+                        subtitle = stringResource(R.string.settings_wifi_only_desc),
+                        trailing = {
+                            Switch(
+                                checked = state.wifiOnlyDownloads,
+                                onCheckedChange = { viewModel.setWifiOnlyDownloads(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+                    )
+                }
+
+                if (state.hasCrashLog) {
+                    Group(title = stringResource(R.string.settings_diagnostics)) {
+                        SettingRow(
+                            icon = Icons.Default.BugReport,
+                            title = stringResource(R.string.settings_crash_log),
+                            subtitle = stringResource(R.string.settings_crash_log_desc),
+                            actionLabel = stringResource(R.string.action_copy),
+                            onAction = { viewModel.copyCrashLog(context) }
+                        )
+                    }
                 }
 
                 Group(title = stringResource(R.string.settings_about)) {
@@ -221,7 +326,8 @@ private fun SettingRow(
     title: String,
     subtitle: String? = null,
     actionLabel: String? = null,
-    onAction: (() -> Unit)? = null
+    onAction: (() -> Unit)? = null,
+    trailing: @Composable (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -264,6 +370,9 @@ private fun SettingRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+        if (trailing != null) {
+            trailing()
         }
         if (actionLabel != null && onAction != null) {
             TextButton(onClick = onAction) {
