@@ -12,15 +12,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -34,10 +38,12 @@ import com.example.spoyt.download.Downloads
 import com.example.spoyt.player.PlaybackEvents
 import com.example.spoyt.ui.components.MiniPlayer
 import com.example.spoyt.ui.components.SpoytBottomBar
+import com.example.spoyt.ui.components.SpoytDrawer
 import com.example.spoyt.ui.nav.PlayerNavigationController
 import com.example.spoyt.ui.nav.Screen
 import com.example.spoyt.ui.nav.SpoytNavHost
 import com.example.spoyt.ui.theme.SpoytTheme
+import com.example.spoyt.ui.viewmodel.HomeViewModel
 import com.example.spoyt.ui.viewmodel.PlayerViewModel
 import kotlinx.coroutines.launch
 
@@ -71,6 +77,20 @@ private fun SpoytApp() {
     val playerViewModel: PlayerViewModel = viewModel()
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
 
+    // Drawer (hamburger menu) state: playlists live in Room, observed activity-wide.
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val uiScope = rememberCoroutineScope()
+    val drawerViewModel: HomeViewModel = viewModel()
+    val drawerPlaylists by drawerViewModel.playlists.collectAsStateWithLifecycle()
+
+    fun navigateTo(screen: Screen) {
+        navController.navigate(screen.route) {
+            popUpTo(navController.graph.startDestinationId) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
     // Playback and download layers report user-facing failures as text; surface them here.
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(Unit) {
@@ -90,38 +110,49 @@ private fun SpoytApp() {
     val isPlayerRoute = currentRoute == Screen.Player.route
     val showChrome = !isPlayerRoute && currentRoute != null
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        bottomBar = {
-            if (showChrome) {
-                Column {
-                    if (playerState.track != null) {
-                        MiniPlayer(
-                            state = playerState,
-                            onTogglePlay = playerViewModel::playPause,
-                            onNext = playerViewModel::next,
-                            onExpand = { navController.navigate(Screen.Player.route) }
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            SpoytDrawer(
+                currentRoute = currentRoute,
+                playlists = drawerPlaylists,
+                onClose = { uiScope.launch { drawerState.close() } },
+                onHome = { navigateTo(Screen.Home) },
+                onSearch = { navigateTo(Screen.Search) },
+                onLibrary = { navigateTo(Screen.Library) },
+                onPlaylist = { id -> navController.navigate(Screen.PlaylistDetail.create(id)) },
+                onSettings = { navController.navigate(Screen.Settings.route) }
+            )
+        }
+    ) {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            bottomBar = {
+                if (showChrome) {
+                    Column {
+                        if (playerState.track != null) {
+                            MiniPlayer(
+                                state = playerState,
+                                onTogglePlay = playerViewModel::playPause,
+                                onNext = playerViewModel::next,
+                                onExpand = { navController.navigate(Screen.Player.route) }
+                            )
+                        }
+                        SpoytBottomBar(
+                            currentRoute = currentRoute,
+                            onSelected = { screen -> navigateTo(screen) }
                         )
                     }
-                    SpoytBottomBar(
-                        currentRoute = currentRoute,
-                        onSelected = { screen ->
-                            navController.navigate(screen.route) {
-                                popUpTo(navController.graph.startDestinationId) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }
-                    )
                 }
             }
-        }
-    ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
-            SpoytNavHost(navController = navController)
+        ) { padding ->
+            Box(modifier = Modifier.padding(padding)) {
+                SpoytNavHost(
+                    navController = navController,
+                    onOpenDrawer = { uiScope.launch { drawerState.open() } }
+                )
+            }
         }
     }
 }

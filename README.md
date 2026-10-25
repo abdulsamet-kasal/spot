@@ -15,9 +15,31 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.2.0` | Oynatma çökmesi giderildi, durum senkronizasyonu düzeltildi, hamburger menü + responsive arayüz |
 | `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.2.0 neler değişti?
+
+- **Oynatma çökmesi giderildi:** akış çözümleme/yeniden deneme arka plan iş parçacığında
+  çalışırken ExoPlayer'a doğrudan erişiyordu. Android bunu
+  `IllegalStateException: Player is accessed on the wrong thread` ile öldürüyordu.
+  Artık oynatıcıya dokunan her çağrı ana iş parçacığına taşınıyor; ayrıca oynatma ve indirme
+  kapsamlarına `CoroutineExceptionHandler` eklendi, medya servisi kurulumu `try/catch` ile korundu.
+- **Senkronizasyon düzeltmeleri:** arama sonuçları kaydedilirken mevcut şarkı satırları
+  `REPLACE` ile eziliyor ve **beğeni durumu sıfırlanıyordu**. Artık yalnızca eksik satırlar
+  ekleniyor. Beğeni değiştirilirken güncel değer Room'dan okunuyor (hızlı iki dokunuş artık
+  birbirini iptal etmiyor). Arama ve indirme satırlarında kalp/indirme rozeti canlı güncelleniyor.
+- **Hamburger menü:** `ModalNavigationDrawer` ile ana gezinme, çalma listeleri, indirilenler ve
+  ayarlar tek yerden erişilebilir.
+- **Responsive görünüm:** Ana ekran içeriği genişlikle sınırlandı, hızlı erişim kartları
+  ekran genişliğine göre 2/3/4 sütuna çıkıyor; oynatıcı 720dp ve üzerinde iki panelli düzene
+  geçiyor, sıra listesi alt sayfada açılıyor.
+- **Zenginleştirilmiş ana ekran:** "Bugünün ritmi" kartı (karıştır / beğenilenler), son
+  çalınanlar için yatay kapak şeridi ve beğeni durumu satırlarda.
+- **Zenginleştirilmiş oynatıcı:** beğen/indir/sıra ikincil işlem satırı, alt sayfada kuyruk,
+  geniş ekranda yan yana kapak + kontroller.
 
 ### 1.1.1 neler değişti?
 

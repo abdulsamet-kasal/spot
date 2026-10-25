@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -64,6 +65,7 @@ import com.example.spoyt.ui.viewmodel.LibraryViewModel
 fun LibraryScreen(
     onOpenPlaylist: (Int) -> Unit,
     onOpenPlayer: () -> Unit,
+    onOpenDrawer: () -> Unit = {},
     viewModel: LibraryViewModel = viewModel()
 ) {
     val liked by viewModel.likedTracks.collectAsStateWithLifecycle()
@@ -84,6 +86,13 @@ fun LibraryScreen(
                     .padding(start = 20.dp, end = 16.dp, top = 18.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                IconButton(onClick = onOpenDrawer) {
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = stringResource(R.string.drawer_open),
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
                 Text(
                     text = stringResource(R.string.library_title),
                     style = MaterialTheme.typography.headlineMedium,
@@ -122,10 +131,12 @@ fun LibraryScreen(
                         downloads = downloads,
                         allTracks = allTracks,
                         progress = progressMap,
+                        likedIds = liked.map { it.videoId }.toSet(),
                         onPlay = { track ->
                             viewModel.play(listOf(track))
                             onOpenPlayer()
                         },
+                        onLikeToggle = viewModel::toggleLike,
                         onDelete = viewModel::deleteDownload
                     )
 
@@ -246,7 +257,9 @@ private fun DownloadsTab(
     downloads: List<com.example.spoyt.data.local.entities.DownloadEntity>,
     allTracks: List<TrackEntity>,
     progress: Map<String, Int>,
+    likedIds: Set<String>,
     onPlay: (TrackEntity) -> Unit,
+    onLikeToggle: (TrackEntity) -> Unit,
     onDelete: (String) -> Unit
 ) {
     if (downloads.isEmpty()) {
@@ -275,8 +288,10 @@ private fun DownloadsTab(
                 track = track,
                 modifier = Modifier.padding(horizontal = 10.dp),
                 onClick = { onPlay(track) },
+                isLiked = likedIds.contains(track.videoId),
                 downloadState = download.state,
                 downloadProgress = progress[download.videoId],
+                onLikeToggle = { onLikeToggle(track) },
                 onRemove = { onDelete(download.videoId) }
             )
         }

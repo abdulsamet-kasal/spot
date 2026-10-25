@@ -30,7 +30,13 @@ import java.io.File
  */
 object Downloads {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val crashGuard = kotlinx.coroutines.CoroutineExceptionHandler { _, t ->
+        if (t !is kotlinx.coroutines.CancellationException) {
+            postMessage("İndirme sırasında bir sorun oluştu.")
+        }
+    }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + crashGuard)
 
     /** videoId -> 0..100 while a download is running. Removed when it finishes. */
     private val _progress = MutableStateFlow<Map<String, Int>>(emptyMap())

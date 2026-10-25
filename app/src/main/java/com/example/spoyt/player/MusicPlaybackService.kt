@@ -17,11 +17,16 @@ class MusicPlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        PlayerHolder.init(applicationContext)
-
-        val builder = MediaSession.Builder(this, PlayerHolder.engine)
-        pendingLaunchIntent()?.let { builder.setSessionActivity(it) }
-        session = builder.build()
+        try {
+            PlayerHolder.init(applicationContext)
+            val builder = MediaSession.Builder(this, PlayerHolder.engine)
+            pendingLaunchIntent()?.let { builder.setSessionActivity(it) }
+            session = builder.build()
+        } catch (t: Throwable) {
+            // A broken media session must not take the whole app down.
+            PlaybackEvents.post("Oynatıcı başlatılamadı. Lütfen uygulamayı yeniden açın.")
+            stopSelf()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

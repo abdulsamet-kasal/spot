@@ -2,6 +2,8 @@ package com.example.spoyt.player
 
 import android.content.Context
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -43,7 +45,8 @@ object PlayerHolder {
     private var exoPlayer: ExoPlayer? = null
 
     /** videoId -> resolved stream, used to build the playable media item. */
-    private val streamSources = mutableMapOf<String, ResolvedStream>()
+    private val streamSources =
+        java.util.concurrent.ConcurrentHashMap<String, ResolvedStream>()
 
     private val _currentTrack = MutableStateFlow<TrackEntity?>(null)
     private val _queue = MutableStateFlow<List<TrackEntity>>(emptyList())
@@ -61,14 +64,29 @@ object PlayerHolder {
     /** Set by [PlaybackController]: the current track has no playable source yet. */
     var onSourceMissing: ((TrackEntity) -> Unit)? = null
 
+    /**
+     * ExoPlayer is bound to the thread that created it (the main thread). Background
+     * coroutines (stream resolution, retries) must never touch it directly, otherwise the
+     * process dies with "Player is accessed on the wrong thread". Every call that mutates
+     * the player therefore hops to the main looper first.
+     */
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+
+    private fun runOnMain(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post(block)
+    }
+
+
     /** Set by [PlaybackController]: playback failed (expired URL / CDN error), retry once. */
     var onPlaybackFailed: ((TrackEntity) -> Unit)? = null
 
     /** videoIds with an in-flight resolution request, so we never resolve the same track twice. */
-    private val resolving = mutableSetOf<String>()
+    private val resolving: MutableSet<String> =
+        java.util.Collections.synchronizedSet(mutableSetOf())
 
     /** videoIds that already burned their single automatic retry. */
-    private val retried = mutableSetOf<String>()
+    private val retried: MutableSet<String> =
+        java.util.Collections.synchronizedSet(mutableSetOf())
 
     /** Current playback position in milliseconds (read synchronously for the seek bar). */
     val positionMs: Long
@@ -79,7 +97,14 @@ object PlayerHolder {
         get() = exoPlayer?.duration?.takeIf { it > 0 } ?: 0L
 
     fun init(context: Context) {
-        if (exoPlayer == null) {
+        if (exoPlayer != null) return
+        // Creating an ExoPlayer binds it to the current thread's looper, so it must happen on
+        // the main thread even when the request comes from a background coroutine.
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { init(context) }
+            return
+        }
+        try {
             // A browser-like HTTP stack: YouTube's CDN answers 403 to unknown clients and
             // redirects between http/https hosts, both of which ExoPlayer's defaults handle badly.
             val httpFactory = DefaultHttpDataSource.Factory()
@@ -135,6 +160,10 @@ object PlayerHolder {
                 }
             })
             exoPlayer = p
+        } catch (t: Throwable) {
+            // A failed player build must not crash the app; the UI reports it when it tries
+            // to play and finds no engine.
+            exoPlayer = null
         }
     }
 
@@ -217,44 +246,50 @@ object PlayerHolder {
     }
 
     fun playNext() {
-        val q = _queue.value
-        if (q.isEmpty()) return
-        val next = _currentIndex.value + 1
-        if (next > q.lastIndex) {
-            // End of queue: stop instead of silently restarting the last track.
-            exoPlayer?.let {
-                it.pause()
-                it.seekTo(0)
+        runOnMain {
+            val q = _queue.value
+            if (q.isEmpty()) return@runOnMain
+            val next = _currentIndex.value + 1
+            if (next > q.lastIndex) {
+                // End of queue: stop instead of silently restarting the last track.
+                exoPlayer?.let {
+                    it.pause()
+                    it.seekTo(0)
+                }
+                _isPlaying.value = false
+                return@runOnMain
             }
-            _isPlaying.value = false
-            return
+            playIndex(next)
         }
-        playIndex(next)
     }
 
     fun playPrevious() {
-        val q = _queue.value
-        if (q.isEmpty()) return
-        // Standard behaviour: restart the song unless we are already at the beginning.
-        val p = exoPlayer
-        if (p != null && p.currentPosition > 3_000) {
-            p.seekTo(0)
-            return
+        runOnMain {
+            val q = _queue.value
+            if (q.isEmpty()) return@runOnMain
+            // Standard behaviour: restart the song unless we are already at the beginning.
+            val p = exoPlayer
+            if (p != null && p.currentPosition > 3_000) {
+                p.seekTo(0)
+                return@runOnMain
+            }
+            playIndex((_currentIndex.value - 1).coerceAtLeast(0))
         }
-        playIndex((_currentIndex.value - 1).coerceAtLeast(0))
     }
 
     fun playPause() {
-        val p = exoPlayer ?: return
-        if (p.isPlaying) {
-            p.pause()
-        } else {
-            if (p.playbackState == Player.STATE_IDLE) start() else p.play()
+        runOnMain {
+            val p = exoPlayer ?: return@runOnMain
+            if (p.isPlaying) {
+                p.pause()
+            } else {
+                if (p.playbackState == Player.STATE_IDLE) start() else p.play()
+            }
         }
     }
 
     fun seekTo(positionMs: Long) {
-        exoPlayer?.seekTo(positionMs)
+        runOnMain { exoPlayer?.seekTo(positionMs) }
     }
 
     /** Start (or restart) the currently selected track using an already-known source. */
@@ -282,6 +317,10 @@ object PlayerHolder {
     }
 
     private fun attachAndPlay(track: TrackEntity) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { attachAndPlay(track) }
+            return
+        }
         val uri = resolveUri(track.videoId) ?: return
         // Defensive: if the engine is not available yet, say so instead of throwing.
         val p = exoPlayer ?: run {
@@ -303,10 +342,17 @@ object PlayerHolder {
             )
             .build()
 
-        p.setMediaItem(mediaItem, 0)
-        p.prepare()
-        p.play()
-        _isBuffering.value = true
+        try {
+            p.setMediaItem(mediaItem, 0)
+            p.prepare()
+            p.play()
+            _isBuffering.value = true
+        } catch (t: Throwable) {
+            // Never let a player-layer failure kill the process; report it in the UI instead.
+            _isBuffering.value = false
+            _isPlaying.value = false
+            PlaybackEvents.post("Şarkı başlatılamadı. Lütfen tekrar deneyin.")
+        }
     }
 
     /** Prefer the local download file if available; otherwise use the resolved stream URL. */
@@ -322,11 +368,13 @@ object PlayerHolder {
     }
 
     fun release() {
-        exoPlayer?.release()
-        exoPlayer = null
-        streamSources.clear()
-        resolving.clear()
-        retried.clear()
+        runOnMain {
+            exoPlayer?.release()
+            exoPlayer = null
+            streamSources.clear()
+            resolving.clear()
+            retried.clear()
+        }
     }
 }
 
@@ -335,7 +383,7 @@ object PlayerHolder {
  * Populated when a download finishes and re-hydrated from Room on every playback attempt.
  */
 object DownloadPaths {
-    private val paths = mutableMapOf<String, String>()
+    private val paths = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     fun pathFor(videoId: String): String = paths[videoId] ?: ""
 

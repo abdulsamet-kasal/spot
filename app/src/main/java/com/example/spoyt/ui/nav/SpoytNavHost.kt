@@ -13,7 +13,10 @@ import com.example.spoyt.ui.screens.SearchScreen
 import com.example.spoyt.ui.screens.SettingsScreen
 
 @Composable
-fun SpoytNavHost(navController: androidx.navigation.NavHostController) {
+fun SpoytNavHost(
+    navController: androidx.navigation.NavHostController,
+    onOpenDrawer: () -> Unit = {}
+) {
     // Expose the player navigation globally so ViewModels can trigger it.
     PlayerNavigationController.instance = navController
 
@@ -30,18 +33,21 @@ fun SpoytNavHost(navController: androidx.navigation.NavHostController) {
                         launchSingleTop = true
                         restoreState = true
                     }
-                }
+                },
+                onOpenDrawer = onOpenDrawer
             )
         }
         composable(Screen.Search.route) {
             SearchScreen(
-                onOpenPlayer = { navController.navigate(Screen.Player.route) }
+                onOpenPlayer = { navController.navigate(Screen.Player.route) },
+                onOpenDrawer = onOpenDrawer
             )
         }
         composable(Screen.Library.route) {
             LibraryScreen(
                 onOpenPlaylist = { id -> navController.navigate(Screen.PlaylistDetail.create(id)) },
-                onOpenPlayer = { navController.navigate(Screen.Player.route) }
+                onOpenPlayer = { navController.navigate(Screen.Player.route) },
+                onOpenDrawer = onOpenDrawer
             )
         }
         composable(

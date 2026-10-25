@@ -5,17 +5,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -28,17 +31,23 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,12 +67,14 @@ import com.example.spoyt.data.local.entities.TrackEntity
 import com.example.spoyt.ui.components.SpoytBackground
 import com.example.spoyt.ui.theme.SpoytGreen
 import com.example.spoyt.ui.theme.SpoytViolet
+import com.example.spoyt.ui.viewmodel.PlayerUiState
 import com.example.spoyt.ui.viewmodel.PlayerViewModel
 
 /**
- * Full-screen player: large artwork, seek bar, transport controls and the up-next queue.
- * Everything scrolls so the layout survives small screens and landscape.
+ * Full-screen player: large artwork, seek bar, transport controls, secondary actions and the
+ * up-next queue (inline on compact screens, side-by-side on tablets/landscape).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     onBack: () -> Unit,
@@ -72,6 +83,7 @@ fun PlayerScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val likedIds by viewModel.likedIds.collectAsStateWithLifecycle()
     val track = state.track
+    var queueSheetOpen by remember { mutableStateOf(false) }
 
     SpoytBackground(
         accent = if (state.isPlaying) SpoytGreen else SpoytViolet
@@ -87,69 +99,137 @@ fun PlayerScreen(
             return@SpoytBackground
         }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 28.dp)
-        ) {
-            item { PlayerTopBar(onBack = onBack, onDownload = { viewModel.download(track) }) }
+        val liked = likedIds.contains(track.videoId)
+        val upcoming = state.queue.drop(state.currentIndex + 1)
 
-            item { ArtworkBlock(track = track) }
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val wide = maxWidth >= 720.dp
 
-            item {
-                TitleBlock(
-                    track = track,
-                    liked = likedIds.contains(track.videoId),
-                    onLikeToggle = { viewModel.toggleLike(track) }
-                )
-            }
-
-            item {
-                SeekBlock(
-                    positionMs = state.positionMs,
-                    durationMs = state.durationMs,
-                    onSeek = viewModel::seekTo
-                )
-            }
-
-            item {
-                Controls(
-                    isPlaying = state.isPlaying,
-                    isBuffering = state.isBuffering,
-                    onPrevious = viewModel::previous,
-                    onPlayPause = viewModel::playPause,
-                    onNext = viewModel::next
-                )
-            }
-
-            val upcoming = state.queue.drop(state.currentIndex + 1)
-            if (upcoming.isNotEmpty()) {
-                item {
-                    Row(
+            if (wide) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .widthIn(max = 1200.dp)
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .weight(0.46f)
+                            .fillMaxHeight(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = "Sırada",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
+                        PlayerTopBar(onBack = onBack, onDownload = { viewModel.download(track) })
+                        ArtworkBlock(track = track, modifier = Modifier.fillMaxWidth(0.88f))
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .weight(0.54f)
+                            .fillMaxHeight()
+                            .padding(start = 12.dp)
+                    ) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        TitleBlock(
+                            track = track,
+                            liked = liked,
+                            onLikeToggle = { viewModel.toggleLike(track) }
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "${upcoming.size}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        SeekBlock(
+                            positionMs = state.positionMs,
+                            durationMs = state.durationMs,
+                            onSeek = viewModel::seekTo
+                        )
+                        Controls(
+                            isPlaying = state.isPlaying,
+                            isBuffering = state.isBuffering,
+                            onPrevious = viewModel::previous,
+                            onPlayPause = viewModel::playPause,
+                            onNext = viewModel::next
+                        )
+                        ActionRow(
+                            liked = liked,
+                            onLikeToggle = { viewModel.toggleLike(track) },
+                            onDownload = { viewModel.download(track) },
+                            onOpenQueue = { queueSheetOpen = true }
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        QueueList(
+                            state = state,
+                            upcoming = upcoming,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
-                itemsIndexed(upcoming) { i, item ->
-                    QueueRow(
-                        track = item,
-                        index = state.currentIndex + 2 + i,
-                        onClick = { viewModel.playAt(state.currentIndex + 1 + i) }
-                    )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 28.dp)
+                ) {
+                    item { PlayerTopBar(onBack = onBack, onDownload = { viewModel.download(track) }) }
+                    item { ArtworkBlock(track = track) }
+                    item {
+                        TitleBlock(
+                            track = track,
+                            liked = liked,
+                            onLikeToggle = { viewModel.toggleLike(track) }
+                        )
+                    }
+                    item {
+                        SeekBlock(
+                            positionMs = state.positionMs,
+                            durationMs = state.durationMs,
+                            onSeek = viewModel::seekTo
+                        )
+                    }
+                    item {
+                        Controls(
+                            isPlaying = state.isPlaying,
+                            isBuffering = state.isBuffering,
+                            onPrevious = viewModel::previous,
+                            onPlayPause = viewModel::playPause,
+                            onNext = viewModel::next
+                        )
+                    }
+                    item {
+                        ActionRow(
+                            liked = liked,
+                            onLikeToggle = { viewModel.toggleLike(track) },
+                            onDownload = { viewModel.download(track) },
+                            onOpenQueue = { queueSheetOpen = true }
+                        )
+                    }
+                    if (upcoming.isNotEmpty()) {
+                        item { QueueHeader(count = upcoming.size) }
+                        itemsIndexed(upcoming) { i, item ->
+                            QueueRow(
+                                track = item,
+                                index = state.currentIndex + 2 + i,
+                                onClick = { viewModel.playAt(state.currentIndex + 1 + i) }
+                            )
+                        }
+                    }
                 }
+            }
+        }
+
+        if (queueSheetOpen) {
+            ModalBottomSheet(
+                onDismissRequest = { queueSheetOpen = false },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                QueueList(
+                    state = state,
+                    upcoming = upcoming,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(420.dp),
+                    onTrackClick = { index ->
+                        viewModel.playAt(index)
+                        queueSheetOpen = false
+                    }
+                )
             }
         }
     }
@@ -172,7 +252,7 @@ private fun PlayerTopBar(onBack: () -> Unit, onDownload: () -> Unit) {
             )
         }
         Text(
-            text = "Şimdi çalıyor",
+            text = stringResource(R.string.player_now_playing),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -190,10 +270,9 @@ private fun PlayerTopBar(onBack: () -> Unit, onDownload: () -> Unit) {
 }
 
 @Composable
-private fun ArtworkBlock(track: TrackEntity) {
+private fun ArtworkBlock(track: TrackEntity, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .padding(horizontal = 28.dp, vertical = 12.dp)
             .aspectRatio(1f)
             .shadow(
@@ -368,6 +447,123 @@ private fun Controls(
                 contentDescription = stringResource(R.string.player_next),
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(30.dp)
+            )
+        }
+    }
+}
+
+/** Secondary actions: like, download and the queue sheet. */
+@Composable
+private fun ActionRow(
+    liked: Boolean,
+    onLikeToggle: () -> Unit,
+    onDownload: () -> Unit,
+    onOpenQueue: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 28.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SecondaryAction(
+            icon = if (liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+            label = stringResource(if (liked) R.string.menu_unlike else R.string.menu_like),
+            tint = if (liked) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            onClick = onLikeToggle
+        )
+        SecondaryAction(
+            icon = Icons.Default.Download,
+            label = stringResource(R.string.menu_download),
+            onClick = onDownload
+        )
+        SecondaryAction(
+            icon = Icons.Default.QueueMusic,
+            label = stringResource(R.string.player_queue_open),
+            onClick = onOpenQueue
+        )
+    }
+}
+
+@Composable
+private fun SecondaryAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.height(3.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun QueueHeader(count: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = stringResource(R.string.player_queue_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "$count",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** Scrollable queue used both inline (wide layout) and inside the bottom sheet. */
+@Composable
+private fun QueueList(
+    state: PlayerUiState,
+    upcoming: List<TrackEntity>,
+    modifier: Modifier = Modifier,
+    onTrackClick: ((Int) -> Unit)? = null
+) {
+    LazyColumn(modifier = modifier.fillMaxWidth()) {
+        item { QueueHeader(count = upcoming.size) }
+        if (upcoming.isEmpty()) {
+            item {
+                Text(
+                    text = stringResource(R.string.player_queue_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 26.dp, vertical = 12.dp)
+                )
+            }
+        }
+        itemsIndexed(upcoming) { i, item ->
+            QueueRow(
+                track = item,
+                index = state.currentIndex + 2 + i,
+                onClick = { onTrackClick?.invoke(state.currentIndex + 1 + i) }
             )
         }
     }

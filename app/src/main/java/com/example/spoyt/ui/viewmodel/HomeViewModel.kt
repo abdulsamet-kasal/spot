@@ -33,6 +33,12 @@ class HomeViewModel : ViewModel() {
         viewModelScope.playTracks(tracks, index)
     }
 
+    /** "Karıştır": plays the given list in random order. */
+    fun playShuffled(tracks: List<TrackEntity>) {
+        if (tracks.isEmpty()) return
+        viewModelScope.playTracks(tracks.shuffled(), 0)
+    }
+
     fun toggleLike(track: TrackEntity) {
         viewModelScope.toggleLike(track)
     }

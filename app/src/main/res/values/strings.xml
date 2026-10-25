@@ -20,6 +20,20 @@
     <string name="home_empty_recent">Henüz bir şey dinlemedin. Aramaya dokunup başla.</string>
     <string name="home_liked_subtitle">Beğendiğin tüm şarkılar</string>
     <string name="home_downloads_subtitle">Çevrimdışı dinleyebileceklerin</string>
+    <string name="home_shuffle">Karıştır</string>
+
+    <!-- Drawer (hamburger menu) -->
+    <string name="drawer_open">Menüyü aç</string>
+    <string name="drawer_playlists">Çalma listeleri</string>
+    <string name="drawer_more">Daha fazla</string>
+    <string name="drawer_tagline">Müziğin, senin ritminde.</string>
+    <string name="drawer_no_playlists">Henüz çalma listesi yok</string>
+
+    <!-- Player extras -->
+    <string name="player_now_playing">Şimdi çalıyor</string>
+    <string name="player_queue_title">Sırada</string>
+    <string name="player_queue_empty">Sırada başka şarkı yok</string>
+    <string name="player_queue_open">Sırayı aç</string>
 
     <!-- Search -->
     <string name="search_title">Arama</string>

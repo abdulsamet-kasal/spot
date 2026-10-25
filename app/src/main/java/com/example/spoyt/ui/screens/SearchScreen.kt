@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
@@ -58,21 +59,37 @@ import com.example.spoyt.ui.viewmodel.toTrackEntity
 @Composable
 fun SearchScreen(
     onOpenPlayer: () -> Unit,
+    onOpenDrawer: () -> Unit = {},
     viewModel: SearchViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val progressMap by Downloads.progress.collectAsStateWithLifecycle()
+    val likedIds by viewModel.likedIds.collectAsStateWithLifecycle()
+    val downloadStates by viewModel.downloadStates.collectAsStateWithLifecycle()
     var addToPlaylistVideoId by remember { mutableStateOf<String?>(null) }
     val keyboard = LocalSoftwareKeyboardController.current
 
     SpoytBackground {
         Column(modifier = Modifier.fillMaxSize()) {
-            Text(
-                text = stringResource(R.string.search_title),
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(start = 20.dp, top = 18.dp, bottom = 12.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 6.dp, end = 16.dp, top = 10.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onOpenDrawer) {
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = stringResource(R.string.drawer_open),
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.search_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
 
             SearchField(
                 query = state.query,
@@ -131,6 +148,8 @@ fun SearchScreen(
                                         viewModel.play(index)
                                         onOpenPlayer()
                                     },
+                                    isLiked = likedIds.contains(track.videoId),
+                                    downloadState = downloadStates[track.videoId],
                                     downloadProgress = progressMap[track.videoId],
                                     onLikeToggle = { viewModel.toggleLike(result.videoId) },
                                     onDownload = { viewModel.download(track) },

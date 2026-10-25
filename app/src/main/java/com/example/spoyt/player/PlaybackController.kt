@@ -6,6 +6,7 @@ import com.example.spoyt.data.local.repositories.HistoryRepository
 import com.example.spoyt.data.local.repositories.TrackRepository
 import com.example.spoyt.data.remote.YoutubeSource
 import com.example.spoyt.di.AppContainer
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,7 +33,17 @@ class PlaybackController(
     private val youtube: YoutubeSource
 ) {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /**
+     * Background failures must never reach the default uncaught handler: that would kill the
+     * whole process. Report them as a friendly message instead.
+     */
+    private val crashGuard = CoroutineExceptionHandler { _, t ->
+        if (t !is kotlinx.coroutines.CancellationException) {
+            PlaybackEvents.post("Beklenmeyen bir sorun oluştu. Lütfen tekrar deneyin.")
+        }
+    }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + crashGuard)
 
     init {
         // Lazily resolve whatever track became current (next/previous/tap in queue).
@@ -55,8 +66,13 @@ class PlaybackController(
         val safeIndex = startIndex.coerceIn(0, tracks.size - 1)
 
         // Make sure everything we are about to play exists locally (liked/playlists/history
-        // rows already do; search results do not).
-        tracks.forEach { track -> runCatching { trackRepository.saveTrack(track) } }
+        // rows already do; search results do not). Never overwrite an existing row: a search
+        // result carries liked=false and would silently un-like a liked track.
+        tracks.forEach { track ->
+            runCatching {
+                if (!trackRepository.trackExists(track.videoId)) trackRepository.saveTrack(track)
+            }
+        }
 
         // Show the requested queue immediately; the player asks us for the source if missing.
         PlayerHolder.setQueueSilently(tracks, safeIndex)
@@ -108,6 +124,7 @@ class PlaybackController(
         val current = PlayerHolder.currentTrackState.value
         if (current?.videoId == track.videoId) {
             PlayerHolder.reloadCurrent()
+            recordStart(track)
         }
     }
 
@@ -166,9 +183,12 @@ class PlaybackController(
 
     /** Toggles the liked flag for [track] and returns the new value. */
     suspend fun toggleLike(track: TrackEntity): Boolean {
-        val newValue = !track.liked
+        // Read the current value from Room instead of trusting the caller's (possibly stale)
+        // copy: rapid taps used to flip the flag back to its old value.
+        val fresh = runCatching { trackRepository.getTrack(track.videoId) }.getOrNull()
+        val newValue = !(fresh?.liked ?: track.liked)
         runCatching {
-            trackRepository.saveTrack(track)
+            if (fresh == null) trackRepository.saveTrack(track.copy(liked = newValue))
             trackRepository.setLiked(track.videoId, newValue)
         }
         return newValue

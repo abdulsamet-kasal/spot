@@ -9,8 +9,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -30,6 +33,19 @@ class SearchViewModel : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
+
+    /**
+     * Liked/download state is read from Room rather than kept in the search result model:
+     * a result is a plain snapshot, so without this the heart icon and the download badge
+     * never changed after a tap (the "senkronizasyon" problem).
+     */
+    val likedIds: StateFlow<Set<String>> = AppContainer.tracks.getLikedTracks()
+        .map { list -> list.map { it.videoId }.toSet() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    val downloadStates: StateFlow<Map<String, String>> = AppContainer.downloads.getAllDownloads()
+        .map { list -> list.associate { it.videoId to it.state } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     private var searchJob: Job? = null
 
@@ -68,9 +84,15 @@ class SearchViewModel : ViewModel() {
         }
 
         // Persist results so playlists/likes/downloads can reference them later.
+        // Only insert missing rows: saveTracks() would REPLACE existing rows with these
+        // fresh snapshots and wipe their liked flag (a real state-sync bug).
         runCatching {
             withContext(Dispatchers.IO) {
-                AppContainer.tracks.saveTracks(results.map { it.toTrackEntity() })
+                results.forEach { result ->
+                    if (!AppContainer.tracks.trackExists(result.videoId)) {
+                        AppContainer.tracks.saveTrack(result.toTrackEntity())
+                    }
+                }
             }
         }
 
@@ -117,7 +139,9 @@ class SearchViewModel : ViewModel() {
     fun addToQueue(track: TrackEntity) {
         viewModelScope.launch {
             runCatching {
-                AppContainer.tracks.saveTrack(track)
+                if (!AppContainer.tracks.trackExists(track.videoId)) {
+                    AppContainer.tracks.saveTrack(track)
+                }
                 com.example.spoyt.player.PlayerHolder.addToQueue(listOf(track))
             }
         }
