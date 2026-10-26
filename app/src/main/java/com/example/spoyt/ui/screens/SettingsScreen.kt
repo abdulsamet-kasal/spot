@@ -1,6 +1,8 @@
 package com.example.spoyt.ui.screens
 
+import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -215,6 +218,14 @@ fun SettingsScreen(
                             )
                         }
                     )
+                    Divider()
+                    SettingRow(
+                        icon = Icons.Default.Power,
+                        title = "Pil optimizasyonu",
+                        subtitle = "Ekran kapalıyken müzik kesilmesin diye Spoyt'u pil optimizasyonundan hariç tutun",
+                        actionLabel = "Ayar",
+                        onAction = { openBatteryOptimizationSettings(context) }
+                    )
                 }
 
                 if (state.hasCrashLog) {
@@ -393,6 +404,32 @@ private fun Divider() {
         thickness = 1.dp,
         modifier = Modifier.padding(start = 62.dp)
     )
+}
+
+/**
+ * Asks the user to exempt Spoyt from battery optimization.
+ *
+ * Foreground playback plus the player's Wi-Fi wake lock normally suffice, but aggressive
+ * OEM power savers (Xiaomi, Samsung, Huawei, ...) still kill background media services.
+ * This opens the system dialog that whitelists the app; if that dialog is unavailable the
+ * generic battery-optimization list is opened instead.
+ */
+private fun openBatteryOptimizationSettings(context: android.content.Context) {
+    val powerManager = context.getSystemService(android.content.Context.POWER_SERVICE)
+        as? android.os.PowerManager
+    if (powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true) return
+    runCatching {
+        context.startActivity(
+            Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:${context.packageName}")
+            )
+        )
+    }.onFailure {
+        runCatching {
+            context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        }
+    }
 }
 
 @Composable

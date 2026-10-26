@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.4.2` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.4.3` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,6 +15,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.4.3` | Arka plan düzeltmesi: ekran kapanınca Wi-Fi/CPU uykuya geçip akış ~1 dakikada duruyordu — oynatıcı artık çalarken wake lock + Wi-Fi lock tutuyor; Ayarlar'a pil optimizasyonu hariç tutma kısayolu eklendi |
 | `1.4.2` | Erken bitişin asıl kaynağı giderildi: akış/indirme isteklerinde URL'nin istemcisine uygun User-Agent (Android/iOS YouTube istemcisi akışları artık tarayıcı kimliğiyle indirilmiyor), NewPipe isteğinin kendi UA'sı ezilmiyor |
 | `1.4.1` | Yayın kararlılığı: kesilen akışta otomatik kurtarma (kaldığı yerden devam), bozuk URL'de manuel oynatmayla taze çözümleme, kilit ekranı medya kartı (önceki/duraklat/sonraki), aramada 60 sonuca kadar sayfalama |
 | `1.4.0` | Tekrar/oynatma hızı/uyku zamanlayıcısı, kuyruk düzenleme, radyo, sözler (LRCLIB), arama geçmişi, bağlantıdan oynatma, Geçmiş sekmesi, yedekle/geri yükle, Wi-Fi kısıtı, ana ekran widget'ı, uygulama kısayolları, güncelleme kontrolü, R8 + KSP + testler + CI |
@@ -23,6 +24,17 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 | `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.4.3 neler değişti?
+
+- **Arka planda çalma düzeltmesi (ekran kapalıyken kesilme):** Ekran kapanınca Android
+  kısa süre sonra Wi-Fi radyosunu uyutuyordu; 30–120 saniyelik tampon bitince akış
+  duruyor ve şarkı ~1 dakikada kesiliyordu. Oynatıcı artık çalarken `WAKE_MODE_NETWORK`
+  ile **CPU + Wi-Fi wake lock** tutuyor — ekran kapalıyken müzik kesintisiz devam eder.
+- **Pil optimizasyonu kısayolu:** Ayarlar → İndirme bölümüne "Pil optimizasyonu" satırı
+  eklendi. Xiaomi/Samsung/Huawei gibi agresif güç tasarrufu yapan cihazlarda arka plan
+  çalmanın öldürülmemesi için Spoyt'u tek dokunuşla optimizasyon dışında bırakabilirsiniz.
+- `WAKE_LOCK` ve `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` izinleri eklendi.
 
 ### 1.4.2 neler değişti?
 
