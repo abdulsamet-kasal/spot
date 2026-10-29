@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.5.0` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.5.1` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,6 +15,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.5.1` | Paket kimliği `com.sametify.app` oldu ve tüm APK'lar tek bir **Sametify** anahtarıyla imzalanmaya başladı — CI her çalıştırmada yeni debug anahtarı ürettiği için sürümler üst üste kurulamiyordu |
 | `1.5.0` | Uygulama adı **Sametify** + yeni dalga formu logosu, sanatçı adları düzeltmesi (aramada "Bilinmeyen sanatçı"), radyo/mix yeniden çalışıyor, bildirim & kilit ekranında karıştır/tekrar butonları, çalma listesine ekle diyaloğu artık mevcut listeleri gösteriyor, kütüphane çalma listeleri sekmesiyle açılıyor, ana sayfada kişisel öneriler |
 | `1.4.3` | Arka plan düzeltmesi: ekran kapanınca Wi-Fi/CPU uykuya geçip akış ~1 dakikada duruyordu — oynatıcı artık çalarken wake lock + Wi-Fi lock tutuyor; Ayarlar'a pil optimizasyonu hariç tutma kısayolu eklendi |
 | `1.4.2` | Erken bitişin asıl kaynağı giderildi: akış/indirme isteklerinde URL'nin istemcisine uygun User-Agent (Android/iOS YouTube istemcisi akışları artık tarayıcı kimliğiyle indirilmiyor), NewPipe isteğinin kendi UA'sı ezilmiyor |
@@ -25,6 +26,19 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 | `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.5.1 neler değişti?
+
+- **Kurulum çakışması giderildi:** GitHub Actions runner'ları her derlemede kendi debug
+  anahtarını oluşturduğundan yayımlanan her APK farklı imzalıydı; Android de "aynı paket,
+  farklı imza" diyerek güncellemeyi reddediyordu. Artık debug ve release derlemeleri tek bir
+  **Sametify** anahtarıyla imzalanıyor (CI secret'ları / yerelde `keystore.properties`), CI
+  imzayı doğrulamadan release açmıyor.
+- **Yeni paket kimliği:** `com.sametify.app` (kod paketi `com.example.spoyt` olarak kaldı;
+  yalnızca kurulan paket adı değişti). Uygulama adı, kısayol hedefi ve release asset adı
+  Sametify ile uyumlu.
+- Eski `com.example.spoyt` kurulumu yanına ayrı uygulama olarak kurulur; veriler uygulamaya
+  özel alanda olduğu için taşınmaz — tek uygulama isterseniz eskisini kaldırın.
 
 ### 1.5.0 neler değişti?
 
@@ -279,9 +293,15 @@ Hazır APK'yı [Releases](https://github.com/abdulsamet-kasal/spot/releases) say
 telefona kurabilirsiniz (Android 8.0+).
 
 ```powershell
-adb install -r Sametify-1.5.0.apk
-adb shell am start -n com.example.spoyt/.MainActivity
+adb install -r Sametify-1.5.1.apk
+adb shell am start -n com.sametify.app/com.example.spoyt.MainActivity
 ```
+
+> **v1.5.1'de paket kimliği değişti** (`com.example.spoyt` → `com.sametify.app`) ve tüm
+> sürümler artık aynı **Sametify** anahtarıyla imzalanıyor. Eski sürüm (`com.example.spoyt`)
+> telefonunuzda duruyorsa yeni APK yanına ayrı bir uygulama olarak kurulur; beğenilenler,
+> listeler ve indirmeler uygulamanın özel alanında tutulduğu için taşınmaz. Tek uygulama
+> istiyorsanız önce eskisini kaldırın: `adb uninstall com.example.spoyt`.
 
 ## Derleme
 
@@ -290,6 +310,18 @@ $env:ANDROID_HOME     = "C:\Users\<kullanıcı>\AppData\Local\Android\Sdk"
 $env:ANDROID_SDK_ROOT = "C:\Users\<kullanıcı>\AppData\Local\Android\Sdk"
 
 ./gradlew.bat :app:assembleDebug
+```
+
+Yayımlanan APK'lar `keystore.properties` (repoya girmez) veya CI'daki `SAMETIFY_KEYSTORE_*`
+secret'ları ile gösterilen Sametify anahtarıyla imzalanır. Anahtar yoksa debug derlemesi
+normal debug imzasıyla üretilir — yani güncel kurulamaz. Yerel imza için örnek dosya:
+
+```
+# keystore.properties (proje kökü, .gitignore'da)
+storeFile=C:/Users/<kullanıcı>/sametify-keystore/sametify-release.keystore
+storePassword=<parola>
+keyAlias=sametify
+keyPassword=<parola>
 ```
 
 Linux / macOS:

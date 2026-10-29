@@ -25,11 +25,34 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Restore signing key
+        env:
+          SAMETIFY_KEYSTORE_BASE64: ${{ secrets.SAMETIFY_KEYSTORE }}
+        run: |
+          # A fresh runner invents its own debug keystore, so every published APK had a different
+          # signature and Android refused to update an installed app. Sign with the project key.
+          if [ -z "$SAMETIFY_KEYSTORE_BASE64" ]; then
+            echo "SAMETIFY_KEYSTORE secret is missing" >&2
+            exit 1
+          fi
+          echo "$SAMETIFY_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sametify-release.keystore"
+          echo "SAMETIFY_KEYSTORE_FILE=$RUNNER_TEMP/sametify-release.keystore" >> "$GITHUB_ENV"
+
       - name: Run unit tests
         run: ./gradlew --no-daemon :app:testDebugUnitTest
 
       - name: Build debug APK
+        env:
+          SAMETIFY_KEYSTORE_PASSWORD: ${{ secrets.SAMETIFY_KEYSTORE_PASSWORD }}
+          SAMETIFY_KEY_ALIAS: ${{ secrets.SAMETIFY_KEY_ALIAS }}
+          SAMETIFY_KEY_PASSWORD: ${{ secrets.SAMETIFY_KEY_PASSWORD }}
         run: ./gradlew --no-daemon :app:assembleDebug
+
+      - name: Verify APK signature
+        run: |
+          BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify --print-certs \
+            app/build/outputs/apk/debug/app-debug.apk | tee /dev/stderr | grep -q "CN=Sametify"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -57,8 +80,29 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Restore signing key
+        env:
+          SAMETIFY_KEYSTORE_BASE64: ${{ secrets.SAMETIFY_KEYSTORE }}
+        run: |
+          if [ -z "$SAMETIFY_KEYSTORE_BASE64" ]; then
+            echo "SAMETIFY_KEYSTORE secret is missing" >&2
+            exit 1
+          fi
+          echo "$SAMETIFY_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sametify-release.keystore"
+          echo "SAMETIFY_KEYSTORE_FILE=$RUNNER_TEMP/sametify-release.keystore" >> "$GITHUB_ENV"
+
       - name: Build debug APK
+        env:
+          SAMETIFY_KEYSTORE_PASSWORD: ${{ secrets.SAMETIFY_KEYSTORE_PASSWORD }}
+          SAMETIFY_KEY_ALIAS: ${{ secrets.SAMETIFY_KEY_ALIAS }}
+          SAMETIFY_KEY_PASSWORD: ${{ secrets.SAMETIFY_KEY_PASSWORD }}
         run: ./gradlew --no-daemon :app:assembleDebug
+
+      - name: Verify APK signature
+        run: |
+          BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify --print-certs \
+            app/build/outputs/apk/debug/app-debug.apk | tee /dev/stderr | grep -q "CN=Sametify"
 
       - name: Rename APK with version
         run: |

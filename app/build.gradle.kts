@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,20 +7,57 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+/**
+ * A fresh CI runner creates its own debug keystore, so every published APK carried a different
+ * signature and Android refused to update the installed app. Both build types are therefore
+ * signed with one stable key: environment variables in CI, an untracked keystore.properties
+ * for local builds. Without a key the debug build falls back to the normal debug signature.
+ */
+val signingProps = Properties().apply {
+    val propertiesFile = rootProject.file("keystore.properties")
+    if (propertiesFile.exists()) propertiesFile.inputStream().use { load(it) }
+}
+fun signingValue(property: String, env: String): String? =
+    System.getenv(env) ?: signingProps.getProperty(property)
+
+val sametifyStoreFile = signingValue("storeFile", "SAMETIFY_KEYSTORE_FILE")
+val sametifyStorePassword = signingValue("storePassword", "SAMETIFY_KEYSTORE_PASSWORD")
+val sametifyKeyAlias = signingValue("keyAlias", "SAMETIFY_KEY_ALIAS")
+val sametifyKeyPassword = signingValue("keyPassword", "SAMETIFY_KEY_PASSWORD")
+val sametifySigningConfigured = listOf(
+    sametifyStoreFile, sametifyStorePassword, sametifyKeyAlias, sametifyKeyPassword
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.example.spoyt"
     compileSdk = 34
 
+    signingConfigs {
+        if (sametifySigningConfigured) {
+            create("sametify") {
+                storeFile = file(sametifyStoreFile)
+                storePassword = sametifyStorePassword
+                keyAlias = sametifyKeyAlias
+                keyPassword = sametifyKeyPassword
+            }
+        }
+    }
+
     defaultConfig {
-        applicationId = "com.example.spoyt"
+        applicationId = "com.sametify.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "1.5.0"
+        versionCode = 12
+        versionName = "1.5.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        debug {
+            if (sametifySigningConfigured) {
+                signingConfig = signingConfigs.getByName("sametify")
+            }
+        }
         release {
             // R8 shrinking: the APK gets much smaller and NewPipe/Rhino need the keep rules
             // in proguard-rules.pro (reflection-heavy JS signature deciphering).
@@ -28,6 +67,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (sametifySigningConfigured) {
+                signingConfig = signingConfigs.getByName("sametify")
+            }
         }
     }
 

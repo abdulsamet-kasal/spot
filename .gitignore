@@ -26,3 +26,8 @@ release/
 diag.txt
 diag2.txt
 graphify-out/
+
+# Signing key (never committed)
+keystore.properties
+*.keystore
+*.jks
