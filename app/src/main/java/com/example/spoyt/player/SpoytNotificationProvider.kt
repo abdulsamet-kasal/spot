@@ -23,9 +23,7 @@ const val ACTION_MEDIA_NEXT = "com.example.spoyt.action.MEDIA_NEXT"
 const val ACTION_MEDIA_SHUFFLE = "com.example.spoyt.action.MEDIA_SHUFFLE"
 const val ACTION_MEDIA_REPEAT = "com.example.spoyt.action.MEDIA_REPEAT"
 
-/** Custom session commands behind the Android 13+ media card's prev/next buttons. */
-const val CUSTOM_COMMAND_PREV = "spoyt.PREV"
-const val CUSTOM_COMMAND_NEXT = "spoyt.NEXT"
+/** Custom session commands for the two controls that have no standard system button. */
 const val CUSTOM_COMMAND_SHUFFLE = "spoyt.SHUFFLE"
 const val CUSTOM_COMMAND_REPEAT = "spoyt.REPEAT"
 
@@ -37,9 +35,9 @@ private const val CHANNEL_ID = "spoyt_playback"
  * artwork (MediaStyle reads them from the session's MediaMetadata) plus explicit
  * previous / play-pause / next buttons.
  *
- * The transport buttons use explicit service PendingIntents on purpose: the player only
- * ever holds one media item, so ExoPlayer's own seek-to-next/previous commands are
- * unavailable and Media3's default notification would show no skip buttons at all.
+ * The transport buttons use explicit service PendingIntents so the shade always has working
+ * controls; the lock screen and the Android 13+ media card drive the session instead, where
+ * [QueueAwarePlayer] publishes the app-owned queue as native skip commands.
  */
 class SpoytNotificationProvider(private val context: Context) : MediaNotification.Provider {
 
@@ -152,7 +150,7 @@ class SpoytNotificationProvider(private val context: Context) : MediaNotificatio
         /** [MediaNotification] id used when Media3 posts our notification. */
         const val ID = NOTIFICATION_ID
 
-        /** Custom layout (Android 13+ media card) with skip, shuffle and repeat buttons. */
+        /** Custom layout (Android 13+ media card): shuffle and repeat have no system button. */
         fun mediaCardButtons(shuffling: Boolean, repeatMode: RepeatMode): List<CommandButton> {
             fun button(label: String, icon: Int, action: String) = CommandButton.Builder()
                 .setDisplayName(label)
@@ -161,8 +159,6 @@ class SpoytNotificationProvider(private val context: Context) : MediaNotificatio
                 .build()
 
             return listOf(
-                button("Önceki", R.drawable.ic_notif_previous, CUSTOM_COMMAND_PREV),
-                button("Sonraki", R.drawable.ic_notif_next, CUSTOM_COMMAND_NEXT),
                 button(
                     if (shuffling) "Karıştırma: açık" else "Karıştırma: kapalı",
                     if (shuffling) R.drawable.ic_notif_shuffle else R.drawable.ic_notif_shuffle_off,

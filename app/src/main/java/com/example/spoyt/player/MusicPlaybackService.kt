@@ -14,19 +14,22 @@ import com.google.common.util.concurrent.ListenableFuture
  * Media3 [MediaSessionService] that keeps playback alive in the background and publishes
  * the media notification and lock-screen controls.
  *
- * The service owns [PlayerHolder] initialization and exposes the [androidx.media3.exoplayer.ExoPlayer]
- * through a [MediaSession] so system UI, media buttons, and the lock screen can control playback.
+ * The service owns [PlayerHolder] initialization and exposes playback through a [MediaSession]
+ * backed by [QueueAwarePlayer], so system UI, media buttons, and the lock screen can control
+ * playback natively.
  *
  * A custom [SpoytNotificationProvider] builds the notification (title/artist/artwork plus
- * previous / play-pause / next buttons), and custom session commands back the skip buttons
- * on the Android 13+ system media card — the player holds a single media item, so ExoPlayer's
- * own seek commands are unavailable and the default notification would have no skip buttons.
+ * previous / play-pause / next buttons). Skipping itself is native: [QueueAwarePlayer]
+ * advertises the app-owned queue as standard player commands, so the system media card,
+ * the lock screen and media buttons drive [PlayerHolder] through the session instead of
+ * relying on app-specific commands. Only shuffle and repeat, which have no standard
+ * system buttons, are published as custom commands.
  */
 class MusicPlaybackService : MediaSessionService() {
 
     private var session: MediaSession? = null
 
-    /** Authorizes the skip commands and handles them for the system media card. */
+    /** Authorizes and handles the custom shuffle/repeat commands; skipping is a player command. */
     private val sessionCallback = object : MediaSession.Callback {
         override fun onConnect(
             session: MediaSession,
@@ -34,8 +37,6 @@ class MusicPlaybackService : MediaSessionService() {
         ): MediaSession.ConnectionResult {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
                 .buildUpon()
-                .add(SessionCommand(CUSTOM_COMMAND_PREV, Bundle.EMPTY))
-                .add(SessionCommand(CUSTOM_COMMAND_NEXT, Bundle.EMPTY))
                 .add(SessionCommand(CUSTOM_COMMAND_SHUFFLE, Bundle.EMPTY))
                 .add(SessionCommand(CUSTOM_COMMAND_REPEAT, Bundle.EMPTY))
                 .build()
@@ -51,14 +52,6 @@ class MusicPlaybackService : MediaSessionService() {
             args: Bundle
         ): ListenableFuture<SessionResult> {
             return when (command.customAction) {
-                CUSTOM_COMMAND_PREV -> {
-                    PlayerHolder.playPrevious()
-                    Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-                }
-                CUSTOM_COMMAND_NEXT -> {
-                    PlayerHolder.playNext()
-                    Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-                }
                 CUSTOM_COMMAND_SHUFFLE -> {
                     PlayerHolder.toggleShuffle()
                     Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
@@ -79,12 +72,14 @@ class MusicPlaybackService : MediaSessionService() {
         try {
             PlayerHolder.init(applicationContext)
             setMediaNotificationProvider(SpoytNotificationProvider(this))
-            val builder = MediaSession.Builder(this, PlayerHolder.engine)
+            // The session must report the app-owned queue controls, otherwise the system
+            // greys out next/previous: ExoPlayer holds one item and says it cannot skip.
+            val builder = MediaSession.Builder(this, QueueAwarePlayer(PlayerHolder.engine))
                 .setCallback(sessionCallback)
             pendingLaunchIntent()?.let { builder.setSessionActivity(it) }
             session = builder.build()
-            // Skip, shuffle and repeat buttons on the Android 13+ system media card
-            // (lock screen / quick settings).
+            // Shuffle and repeat buttons on the Android 13+ system media card
+            // (lock screen / quick settings); skipping is already a native session command.
             applyMediaCardButtons()
             // Repeat/shuffle are app-owned state, invisible to ExoPlayer: without a nudge the
             // notification would keep the old icons after a toggle.

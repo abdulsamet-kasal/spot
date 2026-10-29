@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.5.1` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.5.2` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,6 +15,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.5.2` | Kilit ekranı / sistem medya kartında **sonraki-önceki butonu gri** sorunu giderildi: kuyruk artık Media3'e standart oynatıcı komutları olarak tanıtılıyor (`QueueAwarePlayer`), böylece geçişler bildirim intent'i yerine native oturum üzerinden yapılıyor. Karıştır/tekrar da native duruma getirildi |
 | `1.5.1` | Paket kimliği `com.sametify.app` oldu ve tüm APK'lar tek bir **Sametify** anahtarıyla imzalanmaya başladı — CI her çalıştırmada yeni debug anahtarı ürettiği için sürümler üst üste kurulamiyordu |
 | `1.5.0` | Uygulama adı **Sametify** + yeni dalga formu logosu, sanatçı adları düzeltmesi (aramada "Bilinmeyen sanatçı"), radyo/mix yeniden çalışıyor, bildirim & kilit ekranında karıştır/tekrar butonları, çalma listesine ekle diyaloğu artık mevcut listeleri gösteriyor, kütüphane çalma listeleri sekmesiyle açılıyor, ana sayfada kişisel öneriler |
 | `1.4.3` | Arka plan düzeltmesi: ekran kapanınca Wi-Fi/CPU uykuya geçip akış ~1 dakikada duruyordu — oynatıcı artık çalarken wake lock + Wi-Fi lock tutuyor; Ayarlar'a pil optimizasyonu hariç tutma kısayolu eklendi |
@@ -26,6 +27,21 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 | `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.5.2 neler değişti?
+
+- **Sonraki/önceki butonu artık gri değil:** kuyruk uygulamada, ExoPlayer'da ise tek medya
+  tutulduğu için oynatıcı "sonraki parça yok" diyor; Media3 de kilit ekranı ve sistem medya
+  kartındaki geçiş butonlarını devre dışı gösteriyordu. `QueueAwarePlayer` (bir
+  `ForwardingPlayer`) bu komutları — `SEEK_TO_NEXT`, `SEEK_TO_NEXT_MEDIA_ITEM`, `SEEK_TO_PREVIOUS`,
+  `SEEK_TO_PREVIOUS_MEDIA_ITEM` — standart olarak duyurup `PlayerHolder`'a yönlendiriyor.
+- **Native uyumluluk:** geçişler artık bildirim intent'leriyle değil media oturumu komutuyla
+  geldiği için kilit ekranı, hızlı ayarlar medya kartı, kulaklık/medya tuşları ve üçüncü taraf
+  kumandalar aynı yolu kullanıyor. Kuyruğun gerçek durumuna göre `hasNext/hasPrevious` de
+  raporlanıyor (son parçada ve tekrar kapalıyken buton gerçekten kapalı görünür).
+- **Karıştır ve tekrar native:** oturum `SET_SHUFFLE_MODE` / `SET_REPEAT_MODE` komutlarını da
+  destekliyor; sistem tam değeri gönderiyor, uygulama kendi durumunu koruyor. Yalnızca bu iki
+  buton özel komut olarak kaldı — geçiş butonlarının tekrarı önlemek için özel karttan çıkarıldı.
 
 ### 1.5.1 neler değişti?
 
@@ -293,7 +309,7 @@ Hazır APK'yı [Releases](https://github.com/abdulsamet-kasal/spot/releases) say
 telefona kurabilirsiniz (Android 8.0+).
 
 ```powershell
-adb install -r Sametify-1.5.1.apk
+adb install -r Sametify-1.5.2.apk
 adb shell am start -n com.sametify.app/com.example.spoyt.MainActivity
 ```
 
@@ -366,6 +382,8 @@ native/
             │   ├── PlayerHolder.kt          # ExoPlayer + HTTP katmanı + kuyruk
             │   ├── PlaybackController.kt    # tembel akış çözümleme + yeniden deneme
             │   ├── PlaybackEvents.kt        # kullanıcıya gösterilecek mesajlar
+            │   ├── QueueAwarePlayer.kt      # kuyruğu native Media3 komutu olarak duyurur
+            │   ├── SpoytNotificationProvider.kt # medya bildirimi + karıştır/tekrar butonları
             │   └── MusicPlaybackService.kt  # MediaSessionService (bildirim)
             ├── download/
             │   ├── DownloadWorker.kt        # WorkManager indirme işçisi (ilerleme + retry)

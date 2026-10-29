@@ -403,11 +403,19 @@ object PlayerHolder {
 
     /** Cycles OFF -> ALL -> ONE -> OFF. */
     fun cycleRepeatMode() {
-        _repeatMode.value = when (_repeatMode.value) {
-            RepeatMode.OFF -> RepeatMode.ALL
-            RepeatMode.ALL -> RepeatMode.ONE
-            RepeatMode.ONE -> RepeatMode.OFF
-        }
+        setRepeatMode(
+            when (_repeatMode.value) {
+                RepeatMode.OFF -> RepeatMode.ALL
+                RepeatMode.ALL -> RepeatMode.ONE
+                RepeatMode.ONE -> RepeatMode.OFF
+            }
+        )
+    }
+
+    /** Applies an explicit repeat mode; the system media card sends exact values, not a cycle. */
+    fun setRepeatMode(mode: RepeatMode) {
+        if (_repeatMode.value == mode) return
+        _repeatMode.value = mode
         onTransportControlsChanged?.invoke()
     }
 
