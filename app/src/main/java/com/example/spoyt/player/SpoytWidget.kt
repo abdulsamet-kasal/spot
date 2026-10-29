@@ -55,7 +55,7 @@ class SpoytWidgetProvider : AppWidgetProvider() {
             val track = PlayerHolder.currentTrackState.value
             views.setTextViewText(
                 R.id.widget_title,
-                track?.title ?: "Spoyt"
+                track?.title ?: context.getString(R.string.app_name)
             )
             views.setTextViewText(
                 R.id.widget_artist,

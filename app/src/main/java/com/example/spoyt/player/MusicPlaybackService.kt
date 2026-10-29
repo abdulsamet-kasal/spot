@@ -36,6 +36,8 @@ class MusicPlaybackService : MediaSessionService() {
                 .buildUpon()
                 .add(SessionCommand(CUSTOM_COMMAND_PREV, Bundle.EMPTY))
                 .add(SessionCommand(CUSTOM_COMMAND_NEXT, Bundle.EMPTY))
+                .add(SessionCommand(CUSTOM_COMMAND_SHUFFLE, Bundle.EMPTY))
+                .add(SessionCommand(CUSTOM_COMMAND_REPEAT, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
@@ -57,6 +59,14 @@ class MusicPlaybackService : MediaSessionService() {
                     PlayerHolder.playNext()
                     Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                 }
+                CUSTOM_COMMAND_SHUFFLE -> {
+                    PlayerHolder.toggleShuffle()
+                    Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
+                CUSTOM_COMMAND_REPEAT -> {
+                    PlayerHolder.cycleRepeatMode()
+                    Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
                 else -> Futures.immediateFuture(
                     SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED)
                 )
@@ -73,8 +83,15 @@ class MusicPlaybackService : MediaSessionService() {
                 .setCallback(sessionCallback)
             pendingLaunchIntent()?.let { builder.setSessionActivity(it) }
             session = builder.build()
-            // Skip buttons on the Android 13+ system media card (lock screen / quick settings).
-            runCatching { session?.setCustomLayout(SpoytNotificationProvider.mediaCardButtons()) }
+            // Skip, shuffle and repeat buttons on the Android 13+ system media card
+            // (lock screen / quick settings).
+            applyMediaCardButtons()
+            // Repeat/shuffle are app-owned state, invisible to ExoPlayer: without a nudge the
+            // notification would keep the old icons after a toggle.
+            PlayerHolder.onTransportControlsChanged = {
+                applyMediaCardButtons()
+                runCatching { session?.let { onUpdateNotification(it, /* startInForeground = */ true) } }
+            }
             // Mirror playback state changes onto the home-screen widget. The widget reads the
             // PlayerHolder flows, so updating right after the player reports a change is enough.
             PlayerHolder.engine.addListener(
@@ -104,6 +121,8 @@ class MusicPlaybackService : MediaSessionService() {
             ACTION_MEDIA_PREV -> PlayerHolder.playPrevious()
             ACTION_MEDIA_PLAY_PAUSE -> PlayerHolder.playPause()
             ACTION_MEDIA_NEXT -> PlayerHolder.playNext()
+            ACTION_MEDIA_SHUFFLE -> PlayerHolder.toggleShuffle()
+            ACTION_MEDIA_REPEAT -> PlayerHolder.cycleRepeatMode()
         }
         val result = super.onStartCommand(intent, flags, startId)
         // Nudge Media3 into posting the media notification / foreground promotion right away.
@@ -127,10 +146,24 @@ class MusicPlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         // Release the session first; PlayerHolder owns the ExoPlayer lifecycle and releases it.
+        PlayerHolder.onTransportControlsChanged = null
         runCatching { session?.release() }
         session = null
         PlayerHolder.release()
         super.onDestroy()
+    }
+
+    /** Publishing shuffle/repeat state as buttons requires rebuilding the custom layout. */
+    private fun applyMediaCardButtons() {
+        val s = session ?: return
+        runCatching {
+            s.setCustomLayout(
+                SpoytNotificationProvider.mediaCardButtons(
+                    shuffling = PlayerHolder.isShuffling(),
+                    repeatMode = PlayerHolder.repeatModeState.value
+                )
+            )
+        }
     }
 
     /** Tapping the media notification opens the app. */

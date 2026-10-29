@@ -13,4 +13,6 @@ interface TrackRepository {
     suspend fun getTrack(videoId: String): TrackEntity?
     suspend fun trackExists(videoId: String): Boolean
     suspend fun setLiked(videoId: String, liked: Boolean)
+    suspend fun getTracksMissingArtist(limit: Int): List<TrackEntity>
+    suspend fun fillArtist(videoId: String, artist: String)
 }

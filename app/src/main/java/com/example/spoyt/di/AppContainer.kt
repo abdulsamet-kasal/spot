@@ -61,6 +61,7 @@ object AppContainer {
             history = historyRepository!!,
             youtube = youtubeSource!!
         )
+        playbackController?.repairMissingArtists()
     }
 
     val context: Context

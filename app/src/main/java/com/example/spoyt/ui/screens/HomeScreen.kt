@@ -85,6 +85,7 @@ fun HomeScreen(
     val recent by viewModel.recentTracks.collectAsStateWithLifecycle()
     val liked by viewModel.likedTracks.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val recommended by viewModel.recommendedTracks.collectAsStateWithLifecycle()
     var addToPlaylistVideoId by remember { mutableStateOf<String?>(null) }
 
     SpoytBackground {
@@ -135,6 +136,29 @@ fun HomeScreen(
                         playlists = playlists,
                         onOpenPlaylist = onOpenPlaylist
                     )
+                }
+
+                if (recommended.isNotEmpty()) {
+                    item {
+                        Column {
+                            SectionHeader(title = stringResource(R.string.home_recommended))
+                            Text(
+                                text = stringResource(R.string.home_recommended_subtitle),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 20.dp, top = 2.dp)
+                            )
+                        }
+                    }
+                    item {
+                        RecentCarousel(
+                            tracks = recommended.take(12),
+                            onPlay = { index ->
+                                viewModel.play(recommended, index)
+                                onOpenPlayer()
+                            }
+                        )
+                    }
                 }
 
                 if (recent.isNotEmpty()) {

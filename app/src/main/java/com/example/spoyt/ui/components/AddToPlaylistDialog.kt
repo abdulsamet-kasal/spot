@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PlaylistAdd
@@ -42,7 +44,7 @@ fun AddToPlaylistDialog(
     viewModel: AddToPlaylistViewModel = viewModel()
 ) {
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
-    var creatingNew by remember { mutableStateOf(playlists.isEmpty()) }
+    var creatingNew by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
 
     AlertDialog(
@@ -63,7 +65,26 @@ fun AddToPlaylistDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 320.dp)
+                            .verticalScroll(rememberScrollState())
                     ) {
+                        if (playlists.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.playlist_no_playlists),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .padding(vertical = 16.dp)
+                                    .align(Alignment.CenterHorizontally)
+                            )
+                            Text(
+                                text = stringResource(R.string.playlist_no_playlists_subtitle),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .padding(horizontal = 24.dp)
+                                    .align(Alignment.CenterHorizontally)
+                            )
+                        }
                         playlists.forEach { playlist ->
                             Row(
                                 modifier = Modifier

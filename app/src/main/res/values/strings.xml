@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Spoyt</string>
+    <string name="app_name">Sametify</string>
 
     <!-- Bottom navigation -->
     <string name="nav_home">Ana Sayfa</string>
@@ -116,6 +116,11 @@
     <string name="library_empty_liked_subtitle">Beğendiğin şarkılar burada birikir.</string>
     <string name="library_empty_downloads_subtitle">İndirdiğin şarkılar çevrimdışı çalar.</string>
     <string name="library_empty_playlists_subtitle">Yeni bir liste oluşturup şarkı ekle.</string>
+    <string name="home_recommended">Sizin için önerilen</string>
+    <string name="home_recommended_subtitle">Dinlediklerinize göre seçildi</string>
+    <string name="playlist_no_playlists">Henüz çalma listesi yok</string>
+    <string name="playlist_no_playlists_subtitle">Bir liste oluşturarak şarkılarınızı düzenleyebilirsiniz.</string>
+    <string name="player_shuffle">Karıştır</string>
 
     <!-- Playlists -->
     <string name="playlist_title">Çalma Listesi</string>

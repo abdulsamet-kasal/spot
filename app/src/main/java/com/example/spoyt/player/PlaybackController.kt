@@ -11,6 +11,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -54,6 +59,13 @@ class PlaybackController(
     private val prefetching: MutableSet<String> =
         java.util.Collections.synchronizedSet(mutableSetOf())
 
+    private val _recommendations = MutableStateFlow<List<TrackEntity>>(emptyList())
+
+    /** Latest "for you" result; empty until the first [refreshRecommendations] completes. */
+    val recommendations: StateFlow<List<TrackEntity>> = _recommendations.asStateFlow()
+
+    private var recommendationsAt = 0L
+
     init {
         // Lazily resolve whatever track became current (next/previous/tap in queue).
         PlayerHolder.onSourceMissing = { track ->
@@ -79,7 +91,12 @@ class PlaybackController(
         // result carries liked=false and would silently un-like a liked track.
         tracks.forEach { track ->
             runCatching {
-                if (!trackRepository.trackExists(track.videoId)) trackRepository.saveTrack(track)
+                if (!trackRepository.trackExists(track.videoId)) {
+                    trackRepository.saveTrack(track)
+                } else if (track.artist.isNotBlank()) {
+                    // Older rows were written while the artist was still lost in parsing.
+                    trackRepository.fillArtist(track.videoId, track.artist)
+                }
             }
         }
 
@@ -230,13 +247,17 @@ class PlaybackController(
 
     /**
      * Starts a "radio" seeded by [seed]: the seed track plus related tracks resolved from
-     * YouTube. Returns false (with no queue change) when nothing related could be resolved.
+     * YouTube Music. Returns false (with no queue change) when nothing related could be resolved.
      */
     suspend fun startRadio(seed: TrackEntity): Boolean {
         ensurePlayer()
         val related = withContext(Dispatchers.IO) {
-            runCatching { youtube.related(seed.videoId) }.getOrNull()
-        }.orEmpty()
+            runCatching { youtube.radio(seed.videoId, seed.artist) }.getOrDefault(emptyList())
+        }
+        if (related.isEmpty()) {
+            PlaybackEvents.post("Radyo için benzer şarkı bulunamadı. Birazdan tekrar deneyin.")
+            return false
+        }
 
         val seedEntity = runCatching { trackRepository.getTrack(seed.videoId) }.getOrNull() ?: seed
         val radioTracks = buildList {
@@ -265,6 +286,66 @@ class PlaybackController(
         return ok
     }
 
+    /**
+     * Repairs library rows that were saved while the artist was still being lost: asks NewPipe
+     * for the uploader of a few blank rows per app start. Runs on [Dispatchers.IO] and never
+     * touches the player, so it cannot interrupt playback.
+     */
+    fun repairMissingArtists() {
+        scope.launch {
+            val stale = runCatching { trackRepository.getTracksMissingArtist(ARTIST_REPAIR_BATCH) }
+                .getOrDefault(emptyList())
+            stale.forEach { track ->
+                val meta = runCatching { youtube.trackFor(track.videoId) }.getOrNull()
+                if (meta != null && meta.artist.isNotBlank()) {
+                    runCatching { trackRepository.fillArtist(track.videoId, meta.artist) }
+                }
+                delay(400)
+            }
+        }
+    }
+
+    /**
+     * Suggestions built from what the user actually listens to: the most-played tracks become
+     * radio seeds and their similar tracks are collected. Cached in memory because each
+     * refresh costs one radio lookup per seed.
+     */
+    fun refreshRecommendations() {
+        val now = System.currentTimeMillis()
+        val reuse = _recommendations.value.isNotEmpty() && now - recommendationsAt < RECOMMENDATION_TTL_MS
+        if (reuse) return
+        scope.launch {
+            val seeds = runCatching { history.getMostPlayedTracks(RECOMMENDATION_SEEDS).first() }
+                .getOrDefault(emptyList())
+            if (seeds.isEmpty()) return@launch
+            val alreadyHeard = seeds.mapTo(HashSet()) { it.videoId }
+            val collected = LinkedHashMap<String, TrackEntity>()
+            seeds.forEach { seed ->
+                val similar = runCatching { youtube.radio(seed.videoId, seed.artist) }
+                    .getOrDefault(emptyList())
+                similar.forEach { result ->
+                    if (result.videoId !in alreadyHeard) {
+                        collected.putIfAbsent(
+                            result.videoId,
+                            TrackEntity(
+                                videoId = result.videoId,
+                                title = result.title,
+                                artist = result.artist,
+                                durationSeconds = result.durationSeconds,
+                                thumbnailUrl = result.thumbnailUrl
+                            )
+                        )
+                    }
+                }
+                delay(300)
+            }
+            if (collected.isNotEmpty()) {
+                _recommendations.value = collected.values.take(RECOMMENDATION_LIMIT)
+                recommendationsAt = now
+            }
+        }
+    }
+
     /** Toggles the liked flag for [track] and returns the new value. */
     suspend fun toggleLike(track: TrackEntity): Boolean {
         // Read the current value from Room instead of trusting the caller's (possibly stale)
@@ -289,5 +370,17 @@ class PlaybackController(
 
         /** How many upcoming tracks to resolve in the background while one plays. */
         private const val PREFETCH_TRACKS = 2
+
+        /** How many artist-less library rows to repair per app start. */
+        private const val ARTIST_REPAIR_BATCH = 12
+
+        /** How many listened tracks feed the "for you" radio seeds. */
+        private const val RECOMMENDATION_SEEDS = 3
+
+        /** How many suggested tracks the home shelf shows. */
+        private const val RECOMMENDATION_LIMIT = 12
+
+        /** Refreshing costs network calls per seed, so results are reused for a few hours. */
+        private const val RECOMMENDATION_TTL_MS = 3L * 60 * 60 * 1000
     }
 }

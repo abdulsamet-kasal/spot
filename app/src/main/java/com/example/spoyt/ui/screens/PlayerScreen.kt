@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
@@ -106,6 +107,7 @@ fun PlayerScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val likedIds by viewModel.likedIds.collectAsStateWithLifecycle()
     val repeatMode by viewModel.repeatMode.collectAsStateWithLifecycle()
+    val shuffling by viewModel.isShuffling.collectAsStateWithLifecycle()
     val playbackSpeed by viewModel.playbackSpeed.collectAsStateWithLifecycle()
     val sleepRemainingMs by viewModel.sleepRemainingMs.collectAsStateWithLifecycle()
     val artworkColor by viewModel.artworkColor.collectAsStateWithLifecycle()
@@ -217,11 +219,13 @@ fun PlayerScreen(
                         ActionRow(
                             liked = liked,
                             repeatMode = repeatMode,
+                            shuffling = shuffling,
                             onLikeToggle = { viewModel.toggleLike(track) },
                             onAddToPlaylist = { addToPlaylistVideoId = track.videoId },
                             onDownload = { viewModel.download(track) },
                             onOpenQueue = { queueSheetOpen = true },
-                            onRepeat = { viewModel.cycleRepeatMode() }
+                            onRepeat = { viewModel.cycleRepeatMode() },
+                            onShuffle = { viewModel.toggleShuffle() }
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         QueueList(
@@ -286,11 +290,13 @@ fun PlayerScreen(
                         ActionRow(
                             liked = liked,
                             repeatMode = repeatMode,
+                            shuffling = shuffling,
                             onLikeToggle = { viewModel.toggleLike(track) },
                             onAddToPlaylist = { addToPlaylistVideoId = track.videoId },
                             onDownload = { viewModel.download(track) },
                             onOpenQueue = { queueSheetOpen = true },
-                            onRepeat = { viewModel.cycleRepeatMode() }
+                            onRepeat = { viewModel.cycleRepeatMode() },
+                            onShuffle = { viewModel.toggleShuffle() }
                         )
                     }
                     if (upcoming.isNotEmpty()) {
@@ -669,16 +675,18 @@ private fun Controls(
     }
 }
 
-/** Secondary actions: like, add to playlist, download, queue sheet and repeat. */
+/** Secondary actions: like, add to playlist, download, queue sheet, shuffle and repeat. */
 @Composable
 private fun ActionRow(
     liked: Boolean,
     repeatMode: RepeatMode,
+    shuffling: Boolean,
     onLikeToggle: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onDownload: () -> Unit,
     onOpenQueue: () -> Unit,
-    onRepeat: () -> Unit
+    onRepeat: () -> Unit,
+    onShuffle: () -> Unit
 ) {
     val repeatIcon = if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat
     val repeatActive = repeatMode != RepeatMode.OFF
@@ -705,6 +713,13 @@ private fun ActionRow(
             icon = Icons.Default.Download,
             label = stringResource(R.string.menu_download),
             onClick = onDownload
+        )
+        SecondaryAction(
+            icon = Icons.Default.Shuffle,
+            label = stringResource(R.string.player_shuffle),
+            tint = if (shuffling) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            onClick = onShuffle
         )
         SecondaryAction(
             icon = repeatIcon,
@@ -746,7 +761,10 @@ private fun SecondaryAction(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 68.dp)
         )
     }
 }

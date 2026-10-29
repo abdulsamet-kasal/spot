@@ -1,4 +1,4 @@
-# Spoyt
+# Sametify
 
 Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkıları **YouTube Music**
 üzerinde **NewPipe Extractor** ile arar, **Media3 (ExoPlayer)** ile arka planda oynatır ve
@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.4.3` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.5.0` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,6 +15,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.5.0` | Uygulama adı **Sametify** + yeni dalga formu logosu, sanatçı adları düzeltmesi (aramada "Bilinmeyen sanatçı"), radyo/mix yeniden çalışıyor, bildirim & kilit ekranında karıştır/tekrar butonları, çalma listesine ekle diyaloğu artık mevcut listeleri gösteriyor, kütüphane çalma listeleri sekmesiyle açılıyor, ana sayfada kişisel öneriler |
 | `1.4.3` | Arka plan düzeltmesi: ekran kapanınca Wi-Fi/CPU uykuya geçip akış ~1 dakikada duruyordu — oynatıcı artık çalarken wake lock + Wi-Fi lock tutuyor; Ayarlar'a pil optimizasyonu hariç tutma kısayolu eklendi |
 | `1.4.2` | Erken bitişin asıl kaynağı giderildi: akış/indirme isteklerinde URL'nin istemcisine uygun User-Agent (Android/iOS YouTube istemcisi akışları artık tarayıcı kimliğiyle indirilmiyor), NewPipe isteğinin kendi UA'sı ezilmiyor |
 | `1.4.1` | Yayın kararlılığı: kesilen akışta otomatik kurtarma (kaldığı yerden devam), bozuk URL'de manuel oynatmayla taze çözümleme, kilit ekranı medya kartı (önceki/duraklat/sonraki), aramada 60 sonuca kadar sayfalama |
@@ -25,6 +26,25 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
 
+### 1.5.0 neler değişti?
+
+- **Yeni kimlik:** uygulama adı **Sametify**; launcher ikonu mor→siyah degrade zemin üzerine
+  beyaz/yeşil dalga formu logosuyla yenilendi (uydurma ad ve logo çekmecesinin içinden de
+  aynı marka görünüyor).
+- **Sanatçı adları:** NewPipe aramasında sonuç nesneleri yanlış tür kontrolüyle okunduğu için
+  sanatçı ve süre **her sonuçta boş** geliyordu ("Bilinmeyen sanatçı"). Doğru tür (`StreamInfoItem`)
+  okunuyor; kayıtlı geçmiş şarkılar için eksik sanatçılar arka planda tek tek onarılıyor.
+- **Radyo / mix:** `RDAMVM<videoId>` karışık listesi NewPipe'ın playlist extractor'ı ile
+  çözülüyor (25 parça, sanatçı + süre ile); yeterli sonuç yoksa "ilgili şarkılar", o da olmazsa
+  sanatçının diğer parçaları deniyor. Hiçbir şey bulunamazsa kullanıcı uyarılıyor.
+- **Bildirim ve kilit ekranı:** önceki/sonraki artık servise giden net intent'lerle çalışıyor;
+  **Karıştır** ve **Tekrar** (kapalı → tüm liste → tek şarkı) butonları eklendi, ikonlar
+  güncel duruma göre değişiyor. Oynatıcı ekranına da karıştır butonu kondu.
+- **Çalma listesine ekle:** diyalog doğrudan mevcut listeleri listeliyor (yeni liste ekranına
+  zorlamıyor), uzun listelerde kaydırılabiliyor.
+- **Kütüphane:** ilk açılışta **Çalma Listeleri** sekmesi geliyor.
+- **Öneriler:** en sık dinlenen şarkılardan yola çıkarak ana sayfada "Sana öneriler" satırı.
+
 ### 1.4.3 neler değişti?
 
 - **Arka planda çalma düzeltmesi (ekran kapalıyken kesilme):** Ekran kapanınca Android
@@ -33,7 +53,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
   ile **CPU + Wi-Fi wake lock** tutuyor — ekran kapalıyken müzik kesintisiz devam eder.
 - **Pil optimizasyonu kısayolu:** Ayarlar → İndirme bölümüne "Pil optimizasyonu" satırı
   eklendi. Xiaomi/Samsung/Huawei gibi agresif güç tasarrufu yapan cihazlarda arka plan
-  çalmanın öldürülmemesi için Spoyt'u tek dokunuşla optimizasyon dışında bırakabilirsiniz.
+  çalmanın öldürülmemesi için Sametify'ı tek dokunuşla optimizasyon dışında bırakabilirsiniz.
 - `WAKE_LOCK` ve `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` izinleri eklendi.
 
 ### 1.4.2 neler değişti?
@@ -259,7 +279,7 @@ Hazır APK'yı [Releases](https://github.com/abdulsamet-kasal/spot/releases) say
 telefona kurabilirsiniz (Android 8.0+).
 
 ```powershell
-adb install -r Spoyt-1.1.1.apk
+adb install -r Sametify-1.5.0.apk
 adb shell am start -n com.example.spoyt/.MainActivity
 ```
 

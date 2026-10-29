@@ -4,7 +4,7 @@ import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.StreamingService
 import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.stream.AudioStream
-import org.schabi.newpipe.extractor.stream.StreamInfoItemExtractor
+import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -98,7 +98,6 @@ class YoutubeSource {
             emptyList()
         }
     }
-
     /**
      * Resolves the metadata (title/artist/duration/thumbnail) of a single video id, e.g. one
      * pasted as a YouTube link into the search field. Returns null on any failure.
@@ -132,6 +131,34 @@ class YoutubeSource {
             .take(15)
     } catch (e: Exception) {
         // Related items are a bonus; an empty list means "no radio".
+        emptyList()
+    }
+
+    /**
+     * Radio queue seeded by [videoId]. Primary source is the YouTube Music mix playlist
+     * (`RDAMVM` + video id), which yields ~25 real songs with artist and duration. The
+     * watch-page related items and the seed's own artist are fallbacks so a changed
+     * endpoint does not silently leave the user with a one-track "radio".
+     */
+    fun radio(videoId: String, seedArtist: String = ""): List<SearchResult> {
+        val collected = LinkedHashMap<String, SearchResult>()
+        fun add(candidates: List<SearchResult>) {
+            candidates.forEach { if (it.videoId != videoId) collected.putIfAbsent(it.videoId, it) }
+        }
+
+        add(mixPlaylist(videoId))
+        if (collected.size < MIN_RADIO_TRACKS) add(related(videoId))
+        if (collected.size < MIN_RADIO_TRACKS && seedArtist.isNotBlank()) add(search(seedArtist))
+
+        return collected.values.take(RADIO_TRACK_LIMIT)
+    }
+
+    private fun mixPlaylist(videoId: String): List<SearchResult> = try {
+        val extractor =
+            service().getPlaylistExtractor("https://music.youtube.com/playlist?list=RDAMVM$videoId")
+        extractor.fetchPage()
+        extractor.initialPage.items.mapNotNull { toSearchResult(it) }
+    } catch (e: Exception) {
         emptyList()
     }
 
@@ -191,9 +218,11 @@ class YoutubeSource {
             val title = item.name?.trim().orEmpty()
             if (title.isEmpty()) return null
 
+            // NewPipe hands out committed InfoItem objects here, not extractors: the artist and
+            // duration live on StreamInfoItem (verified against live music_youtube search pages).
             var artist = ""
             var duration = 0L
-            if (item is StreamInfoItemExtractor) {
+            if (item is StreamInfoItem) {
                 artist = cleanArtistName(item.uploaderName.orEmpty())
                 duration = item.duration.coerceAtLeast(0)
             }
@@ -235,5 +264,11 @@ class YoutubeSource {
 
         /** Upper bound of search results shown for one query. */
         const val SEARCH_RESULT_LIMIT = 60
+
+        /** Below this many candidates the radio seed is considered a failure and is retried. */
+        private const val MIN_RADIO_TRACKS = 5
+
+        /** How many tracks a radio session is queued with. */
+        private const val RADIO_TRACK_LIMIT = 25
     }
 }

@@ -83,6 +83,7 @@ object PlayerHolder {
     private val _isPlaying = MutableStateFlow(false)
     private val _isBuffering = MutableStateFlow(false)
     private val _repeatMode = MutableStateFlow(RepeatMode.OFF)
+    private val _isShuffling = MutableStateFlow(false)
     private val _playbackSpeed = MutableStateFlow(1.0f)
 
     /** Read-only exposures for the UI layer. */
@@ -92,7 +93,14 @@ object PlayerHolder {
     val isPlayingState: StateFlow<Boolean> = _isPlaying.asStateFlow()
     val isBufferingState: StateFlow<Boolean> = _isBuffering.asStateFlow()
     val repeatModeState: StateFlow<RepeatMode> = _repeatMode.asStateFlow()
+    val isShufflingState: StateFlow<Boolean> = _isShuffling.asStateFlow()
     val playbackSpeedState: StateFlow<Float> = _playbackSpeed.asStateFlow()
+
+    /**
+     * Set by [MusicPlaybackService]: repeat/shuffle changed outside the player, so the media
+     * notification and the lock-screen button states must be rebuilt.
+     */
+    var onTransportControlsChanged: (() -> Unit)? = null
 
     /** Set by [PlaybackController]: the current track has no playable source yet. */
     var onSourceMissing: ((TrackEntity) -> Unit)? = null
@@ -400,6 +408,30 @@ object PlayerHolder {
             RepeatMode.ALL -> RepeatMode.ONE
             RepeatMode.ONE -> RepeatMode.OFF
         }
+        onTransportControlsChanged?.invoke()
+    }
+
+    /**
+     * Turns shuffle on/off. The already-played part of the queue and the current track keep
+     * their place; only the upcoming tracks are reordered, so the next skip lands somewhere
+     * unexpected without interrupting what is playing.
+     */
+    fun toggleShuffle() {
+        val on = !_isShuffling.value
+        _isShuffling.value = on
+        if (on) reshuffleUpcoming()
+        onTransportControlsChanged?.invoke()
+    }
+
+    /** Whether shuffle is currently active (read by the notification and the player UI). */
+    fun isShuffling(): Boolean = _isShuffling.value
+
+    private fun reshuffleUpcoming() {
+        val q = _queue.value
+        val index = _currentIndex.value
+        if (q.size < 3) return
+        val current = index.coerceIn(0, q.lastIndex)
+        _queue.value = q.take(current + 1) + q.subList(current + 1, q.size).shuffled()
     }
 
     /** Sets the playback speed (0.5x..2x range enforced by the UI). */

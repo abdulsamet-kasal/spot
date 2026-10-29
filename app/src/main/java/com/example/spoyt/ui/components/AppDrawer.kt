@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GetApp
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -39,8 +38,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.spoyt.R
 import com.example.spoyt.data.local.entities.PlaylistEntity
 import com.example.spoyt.ui.theme.SpoytGreen
 import com.example.spoyt.ui.theme.SpoytViolet
@@ -68,6 +70,7 @@ fun SpoytDrawer(
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull().orEmpty()
     }
+    val appName = stringResource(R.string.app_name)
 
     ModalDrawerSheet(
         modifier = Modifier.width(310.dp),
@@ -156,7 +159,7 @@ fun SpoytDrawer(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
         Text(
-            text = if (versionName.isBlank()) "Spoyt" else "Spoyt  ·  v$versionName",
+            text = if (versionName.isBlank()) appName else "$appName  ·  v$versionName",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 26.dp, vertical = 14.dp)
@@ -185,15 +188,15 @@ private fun DrawerHeader() {
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.MusicNote,
+                    painter = painterResource(R.drawable.ic_sametify_mark),
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = Color.Unspecified,
                     modifier = Modifier.size(26.dp)
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Spoyt",
+                text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.headlineSmall,
                 color = Color.White
             )

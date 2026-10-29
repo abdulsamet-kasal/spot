@@ -7,6 +7,7 @@ import coil.request.ImageRequest
 import com.example.spoyt.data.local.entities.TrackEntity
 import com.example.spoyt.data.remote.LrcLine
 import com.example.spoyt.di.AppContainer
+import com.example.spoyt.player.PlaybackEvents
 import com.example.spoyt.player.PlayerHolder
 import com.example.spoyt.player.RepeatMode
 import com.example.spoyt.player.SleepTimer
@@ -53,6 +54,9 @@ class PlayerViewModel : ViewModel() {
 
     private val _repeatMode = MutableStateFlow(RepeatMode.OFF)
     val repeatMode: StateFlow<RepeatMode> = _repeatMode.asStateFlow()
+
+    private val _isShuffling = MutableStateFlow(false)
+    val isShuffling: StateFlow<Boolean> = _isShuffling.asStateFlow()
 
     private val _playbackSpeed = MutableStateFlow(1.0f)
     val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
@@ -103,6 +107,11 @@ class PlayerViewModel : ViewModel() {
         viewModelScope.launch {
             PlayerHolder.repeatModeState.collect { mode ->
                 _repeatMode.value = mode
+            }
+        }
+        viewModelScope.launch {
+            PlayerHolder.isShufflingState.collect { on ->
+                _isShuffling.value = on
             }
         }
         viewModelScope.launch {
@@ -159,6 +168,9 @@ class PlayerViewModel : ViewModel() {
     /** Cycles repeat OFF -> ALL -> ONE -> OFF. */
     fun cycleRepeatMode() = PlayerHolder.cycleRepeatMode()
 
+    /** Reorders the upcoming queue and keeps it reordered while shuffle is on. */
+    fun toggleShuffle() = PlayerHolder.toggleShuffle()
+
     /** Playback speed multiplier (0.5x..2.5x). */
     fun setSpeed(speed: Float) = PlayerHolder.setSpeed(speed)
 
@@ -171,6 +183,7 @@ class PlayerViewModel : ViewModel() {
     fun startRadio() {
         val track = _uiState.value.track ?: return
         viewModelScope.launch {
+            PlaybackEvents.post("Radyo hazırlanıyor…")
             runCatching { AppContainer.playback.startRadio(track) }
         }
     }

@@ -35,4 +35,12 @@ interface TrackDao {
 
     @Query("UPDATE tracks SET liked = :liked WHERE videoId = :videoId")
     suspend fun setLiked(videoId: String, liked: Boolean)
+
+    // Rows written before search results carried an uploader stay blank forever, because
+    // insert() is IGNORE on conflict. These two queries let the app heal them.
+    @Query("SELECT * FROM tracks WHERE artist = '' ORDER BY addedAt DESC LIMIT :limit")
+    suspend fun getTracksMissingArtist(limit: Int): List<TrackEntity>
+
+    @Query("UPDATE tracks SET artist = :artist WHERE videoId = :videoId AND artist = ''")
+    suspend fun fillArtist(videoId: String, artist: String)
 }

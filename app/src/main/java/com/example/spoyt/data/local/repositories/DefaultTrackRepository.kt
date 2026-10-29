@@ -32,4 +32,11 @@ class DefaultTrackRepository(private val database: AppDatabase) : TrackRepositor
     override suspend fun setLiked(videoId: String, liked: Boolean) {
         dao.setLiked(videoId, liked)
     }
+
+    override suspend fun getTracksMissingArtist(limit: Int): List<TrackEntity> =
+        dao.getTracksMissingArtist(limit)
+
+    override suspend fun fillArtist(videoId: String, artist: String) {
+        dao.fillArtist(videoId, artist)
+    }
 }

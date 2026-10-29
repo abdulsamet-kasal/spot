@@ -24,3 +24,5 @@ release/
 # Logs / diagnostics
 *.log
 diag.txt
+diag2.txt
+graphify-out/

@@ -79,7 +79,7 @@ fun LibraryScreen(
     val topTracks by viewModel.topTracks.collectAsStateWithLifecycle()
     val progressMap by Downloads.progress.collectAsStateWithLifecycle()
 
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(2) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var newPlaylistName by remember { mutableStateOf("") }
     var addToPlaylistVideoId by remember { mutableStateOf<String?>(null) }

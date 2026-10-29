@@ -31,6 +31,13 @@ class HomeViewModel : ViewModel() {
         AppContainer.playlists.getAllPlaylists()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Songs similar to the most-listened ones, resolved in the background from radio seeds. */
+    val recommendedTracks: StateFlow<List<TrackEntity>> = AppContainer.playback.recommendations
+
+    init {
+        AppContainer.playback.refreshRecommendations()
+    }
+
     fun play(tracks: List<TrackEntity>, index: Int = 0) {
         viewModelScope.playTracks(tracks, index)
     }

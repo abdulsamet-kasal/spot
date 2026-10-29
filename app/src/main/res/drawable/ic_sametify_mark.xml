@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Sametify mark outside the launcher safe zone: the waveform fills the whole canvas. -->
+    <path
+        android:pathData="M18,41 L18,67"
+        android:strokeColor="#B3FFFFFF"
+        android:strokeWidth="12"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M36,26 L36,82"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="12"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M54,11 L54,97"
+        android:strokeColor="#1ED760"
+        android:strokeWidth="12"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M72,29 L72,79"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="12"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M90,44 L90,64"
+        android:strokeColor="#B3FFFFFF"
+        android:strokeWidth="12"
+        android:strokeLineCap="round" />
+</vector>
