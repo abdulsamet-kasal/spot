@@ -118,16 +118,50 @@ object PlayerHolder {
     }
 
 
-    /** Set by [PlaybackController]: playback failed (expired URL / CDN error), retry once. */
-    var onPlaybackFailed: ((TrackEntity) -> Unit)? = null
+    /**
+     * Set by [PlaybackController]: playback failed (expired URL / CDN error / stalled network).
+     * The second parameter is the 1-based attempt number, used to back off between retries.
+     */
+    var onPlaybackFailed: ((TrackEntity, Int) -> Unit)? = null
 
     /** videoIds with an in-flight resolution request, so we never resolve the same track twice. */
     private val resolving: MutableSet<String> =
         java.util.Collections.synchronizedSet(mutableSetOf())
 
-    /** videoIds that already burned their single automatic retry. */
-    private val retried: MutableSet<String> =
-        java.util.Collections.synchronizedSet(mutableSetOf())
+    /** Automatic retries already spent per track, cleared when a track actually plays. */
+    private val attempts: MutableMap<String, Int> =
+        java.util.Collections.synchronizedMap(mutableMapOf<String, Int>())
+
+    /** Total automatic recovery attempts per track before it is declared unplayable. */
+    private const val MAX_PLAYBACK_ATTEMPTS = 4
+
+    /** Replaying from zero is more disruptive than resuming a stalled stream. */
+    private const val MAX_PREMATURE_END_ATTEMPTS = 2
+
+    /** How often the screen-off watchdog checks whether music is actually flowing. */
+    private const val WATCHDOG_INTERVAL_MS = 10_000L
+
+    /** Revoking focus is normal during an interruption, so only a minute-long one is repaired. */
+    private const val WATCHDOG_FOCUS_TICKS = 6
+
+    /** A stalled load needs ~90 s before the watchdog trades the URL for a fresh one. */
+    private const val WATCHDOG_RERESOLVE_TICKS = 9
+
+    /**
+     * Claims the next automatic retry for [videoId].
+     *
+     * A background stall used to be fatal after exactly one attempt: the retry re-resolves the
+     * URL over the very network that just stalled, so one failed hop ended the song. Backing off
+     * and allowing a few attempts rides out a screen-off throttle instead of giving up.
+     *
+     * Returns the attempt number, or 0 when the retry budget for this track is exhausted.
+     */
+    private fun claimRetry(videoId: String): Int {
+        val next = (attempts[videoId] ?: 0) + 1
+        if (next > MAX_PLAYBACK_ATTEMPTS) return 0
+        attempts[videoId] = next
+        return next
+    }
 
     /**
      * Position (ms) to resume from after a mid-stream failure. Set by the error handler,
@@ -135,6 +169,74 @@ object PlayerHolder {
      * the beginning when the CDN dropped us halfway through.
      */
     private var resumePositionMs = 0L
+
+    /**
+     * Screen-off watchdog.
+     *
+     * Aggressive power management can stop playback without raising any error: audio focus is
+     * revoked silently, a killed network load leaves the engine idle, or a socket stalls forever
+     * in BUFFERING. Nothing would restart it until the user opens the app and presses play, so
+     * the music just stays dead. This polls while the user wants music and repairs those three
+     * silent failure modes, each only after it has persisted for several ticks, so a normal skip
+     * or a brief buffer never touches it.
+     */
+    private var stalledTicks = 0
+    private var bufferingTicks = 0
+
+    private val watchdog = object : Runnable {
+        override fun run() {
+            val p = exoPlayer ?: return
+            mainHandler.postDelayed(this, WATCHDOG_INTERVAL_MS)
+            val track = _currentTrack.value
+            if (p.playWhenReady && !p.isPlaying && track != null) {
+                stalledTicks++
+                when {
+                    // Focus lost silently (typical when the screen turns off): re-request it.
+                    // A real interruption (call, another player) gives up playWhenReady, so this
+                    // only fires when the app was left paused with nothing asking for focus.
+                    p.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_NONE ->
+                        if (stalledTicks >= WATCHDOG_FOCUS_TICKS) {
+                            PlaybackLog.line(
+                                "watchdog: suppression=${p.playbackSuppressionReason} -> yeniden odak"
+                            )
+                            stalledTicks = 0
+                            runCatching {
+                                p.pause()
+                                p.play()
+                            }
+                        }
+
+                    // Idle with a source: re-attach. Idle without one: ask the controller for it.
+                    p.playbackState == Player.STATE_IDLE ->
+                        if (stalledTicks >= 2) {
+                            PlaybackLog.line("watchdog: idle (${track.title}) -> yeniden yükle")
+                            stalledTicks = 0
+                            start()
+                        }
+
+                    // Socket alive but no bytes: the cached URL is dead, so fetch a fresh one.
+                    p.playbackState == Player.STATE_BUFFERING && resolveUri(track.videoId) != null -> {
+                        bufferingTicks++
+                        if (bufferingTicks >= WATCHDOG_RERESOLVE_TICKS) {
+                            bufferingTicks = 0
+                            stalledTicks = 0
+                            resumePositionMs = p.currentPosition.coerceAtLeast(0L)
+                            if (claimRetry(track.videoId) > 0) {
+                                PlaybackLog.line(
+                                    "watchdog: buffering takıldı ${p.bufferedPosition / 1000}s -> yeni URL"
+                                )
+                                invalidateStream(track.videoId)
+                                if (resolving.add(track.videoId)) onSourceMissing?.invoke(track)
+                            }
+                        }
+                    }
+                }
+            } else {
+                stalledTicks = 0
+                bufferingTicks = 0
+            }
+        }
+    }
 
     /** Current playback position in milliseconds (read synchronously for the seek bar). */
     val positionMs: Long
@@ -155,12 +257,13 @@ object PlayerHolder {
         try {
             val mediaSourceFactory = DefaultMediaSourceFactory(UaSwitchingDataSource.Factory())
 
-            // A generous audio buffer: mobile networks stall briefly, and a bigger buffer
-            // rides those out instead of stopping playback.
+            // A generous audio buffer: mobile networks stall briefly (and power down when the
+            // screen is off), so the more music that is already downloaded, the less every
+            // network hiccup is audible. ~5 minutes of audio costs only a few megabytes.
             val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
                 .setBufferDurationsMs(
-                    /* minBufferMs = */ 30_000,
-                    /* maxBufferMs = */ 120_000,
+                    /* minBufferMs = */ 60_000,
+                    /* maxBufferMs = */ 300_000,
                     /* bufferForPlaybackMs = */ 2_500,
                     /* bufferForPlaybackAfterRebufferMs = */ 5_000
                 )
@@ -196,6 +299,20 @@ object PlayerHolder {
             p.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     _isPlaying.value = isPlaying
+                    if (isPlaying) return
+                    // Still playWhenReady but not playing means the player was suppressed
+                    // (audio focus, becoming noisy, device dormancy) rather than paused by us.
+                    val current = exoPlayer ?: return
+                    if (current.playWhenReady) {
+                        PlaybackLog.line(
+                            "stopped while playWhenReady=true state=${current.playbackState} " +
+                                "suppression=${current.playbackSuppressionReason}"
+                        )
+                    }
+                }
+
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    PlaybackLog.line("playWhenReady=$playWhenReady changeReason=$reason")
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
@@ -203,7 +320,7 @@ object PlayerHolder {
                     when (playbackState) {
                         Player.STATE_READY -> {
                             // The source works: clear the retry bookkeeping for this track.
-                            _currentTrack.value?.let { retried.remove(it.videoId) }
+                            _currentTrack.value?.let { attempts.remove(it.videoId) }
                         }
 
                         Player.STATE_ENDED -> {
@@ -231,21 +348,32 @@ object PlayerHolder {
                     // Resume from where the CDN dropped us (anything past the intro);
                     // restart from zero when the failure came immediately.
                     resumePositionMs = if (position > 3_000) position else 0L
-                    // Expired googlevideo URLs and transient CDN errors are worth one retry:
-                    // the controller re-resolves the stream and calls reloadCurrent().
-                    val canRetry = onPlaybackFailed != null && retried.add(track.videoId)
-                    if (canRetry) {
+                    // Expired googlevideo URLs and transient CDN stalls are worth retrying with
+                    // a back off: the controller re-resolves the stream and calls reloadCurrent().
+                    val attempt = claimRetry(track.videoId)
+                    PlaybackLog.line(
+                        "error ${error.errorCodeName}(${error.errorCode}) ${error.message} " +
+                            "attempt=$attempt played=${position / 1000}s/${duration / 1000}s " +
+                            "buffered=${(p?.bufferedPosition ?: 0L) / 1000}s"
+                    )
+                    if (attempt > 0 && onPlaybackFailed != null) {
                         invalidateStream(track.videoId)
-                        onPlaybackFailed?.invoke(track)
+                        onPlaybackFailed?.invoke(track, attempt)
                     } else {
                         PlaybackEvents.post("Bu şarkı şu anda oynatılamıyor.")
                     }
                 }
             })
             exoPlayer = p
+            stalledTicks = 0
+            bufferingTicks = 0
+            mainHandler.removeCallbacks(watchdog)
+            mainHandler.postDelayed(watchdog, WATCHDOG_INTERVAL_MS)
+            PlaybackLog.line("player init ok")
         } catch (t: Throwable) {
             // A failed player build must not crash the app; the UI reports it when it tries
             // to play and finds no engine.
+            PlaybackLog.line("player init failed: ${t.javaClass.simpleName} ${t.message}")
             exoPlayer = null
         }
     }
@@ -286,7 +414,7 @@ object PlayerHolder {
     fun onResolutionFinished(videoId: String) {
         resolving.remove(videoId)
         // A failed resolution should not block a later manual retry.
-        if (resolveUri(videoId) == null) retried.remove(videoId)
+        if (resolveUri(videoId) == null) attempts.remove(videoId)
     }
 
     val currentHasSource: Boolean
@@ -323,9 +451,11 @@ object PlayerHolder {
     fun playIndex(index: Int) {
         val q = _queue.value
         if (q.isEmpty() || index !in q.indices) return
+        // A pending resume position belongs to the track that failed, not to this one.
+        resumePositionMs = 0L
         // Selecting a track (manually or via next/previous) starts a new attempt session:
         // its retry budget must not inherit a previous failure.
-        retried.remove(q[index].videoId)
+        attempts.remove(q[index].videoId)
         _currentIndex.value = index
         _currentTrack.value = q[index]
         start()
@@ -386,7 +516,7 @@ object PlayerHolder {
                 // play must not reuse the cached URL that just failed: give the track a
                 // fresh retry budget and force a new resolution.
                 _currentTrack.value?.let { track ->
-                    retried.remove(track.videoId)
+                    attempts.remove(track.videoId)
                     invalidateStream(track.videoId)
                 }
                 start()
@@ -528,11 +658,13 @@ object PlayerHolder {
      */
     private fun recoverFromPrematureEnd() {
         val track = _currentTrack.value ?: return
-        val canRetry = onPlaybackFailed != null && retried.add(track.videoId)
-        if (canRetry) {
+        val attempt = claimRetry(track.videoId)
+        // Replaying from zero is expensive, so a truncated body gets fewer chances than a stall.
+        if (attempt in 1..MAX_PREMATURE_END_ATTEMPTS && onPlaybackFailed != null) {
             resumePositionMs = 0L
             invalidateStream(track.videoId)
-            onPlaybackFailed?.invoke(track)
+            PlaybackLog.line("premature end at ${(exoPlayer?.duration ?: 0L) / 1000}s attempt=$attempt")
+            onPlaybackFailed?.invoke(track, attempt)
         } else {
             PlaybackEvents.post("Şarkı tam yüklenemedi, sıradakine geçiliyor.")
             playNext()
@@ -619,11 +751,12 @@ object PlayerHolder {
 
     fun release() {
         runOnMain {
+            mainHandler.removeCallbacks(watchdog)
             exoPlayer?.release()
             exoPlayer = null
             streamSources.clear()
             resolving.clear()
-            retried.clear()
+            attempts.clear()
         }
     }
 }
@@ -670,8 +803,10 @@ private class UaSwitchingDataSource : DataSource {
         val d: DataSource = when (dataSpec.uri.scheme?.lowercase()) {
             "http", "https" -> DefaultHttpDataSource.Factory()
                 .setUserAgent(PlayerHolder.userAgentFor(dataSpec.uri.toString()))
-                .setConnectTimeoutMs(15_000)
-                .setReadTimeoutMs(30_000)
+                .setConnectTimeoutMs(20_000)
+                // A stalled read must not become a fatal error while the CPU is throttled in
+                // the background: the buffer keeps playing, so give the radio time to wake up.
+                .setReadTimeoutMs(60_000)
                 .setAllowCrossProtocolRedirects(true)
                 .createDataSource()
             else -> FileDataSource()

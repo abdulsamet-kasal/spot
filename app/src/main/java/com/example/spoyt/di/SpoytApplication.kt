@@ -5,6 +5,7 @@ import android.util.Log
 import com.example.spoyt.data.prefs.AppPrefs
 import com.example.spoyt.data.remote.NewPipeDownloader
 import com.example.spoyt.player.PlayerHolder
+import com.example.spoyt.player.PlaybackLog
 import org.schabi.newpipe.extractor.NewPipe
 import java.io.File
 import java.util.Date
@@ -18,6 +19,9 @@ class SpoytApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // First: the playback trail shares filesDir/crash.log with the crash handler below, so
+        // every later player/service event must be appendable.
+        PlaybackLog.init(this)
         // Initialize NewPipe Extractor with a browser-like OkHttp downloader first,
         // because YoutubeSource reads NewPipe.getDownloader() at construction time.
         NewPipe.init(NewPipeDownloader())

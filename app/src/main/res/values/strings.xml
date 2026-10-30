@@ -157,7 +157,7 @@
     <string name="settings_update_open">Aç</string>
     <string name="settings_diagnostics">Tanılama</string>
     <string name="settings_crash_log">Hata kaydını kopyala</string>
-    <string name="settings_crash_log_desc">Son çökme raporunu panoya kopyalar</string>
+    <string name="settings_crash_log_desc">Son çökme raporunu ve oynatıcı izini panoya kopyalar</string>
     <string name="settings_about">Uygulama</string>
     <string name="settings_legal">Kişisel kullanım için geliştirildi. Hesap, reklam ve izleme yok.</string>
 

@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.5.3` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.5.4` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,6 +15,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.5.4` | Ekran kapalıyken çalmanın kesilmesine karşı **katmanlı** çözüm: servis kendi CPU + Wi-Fi kilitlerini `playWhenReady` boyunca tutuyor (`PlaybackWakeLocks`), tampon 60-300 sn'ye çıkarıldı, HTTP okuma timeout'u 60 sn, tek atımlık yeniden deneme yerine backoff'lu 4 deneme ve bir "sessiz durma" bekçisi; tüm oynatıcı olayları artık Ayarlar → Tanılama üzerinden kopyalanabiliyor |
 | `1.5.3` | Ekran kapalıyken ~30 sn içinde akışın kesilmesi: `C.WAKE_MODE_NETWORK` Wi-Fi kilidi için gereken `ACCESS_WIFI_STATE` izni hiç bildirilmemişti, hata da sessizce yutuluyordu — kilit artık gerçekten alınıyor ve Ayarlar pil istisnasının güncel durumunu gösteriyor |
 | `1.5.2` | Kilit ekranı / sistem medya kartında **sonraki-önceki butonu gri** sorunu giderildi: kuyruk artık Media3'e standart oynatıcı komutları olarak tanıtılıyor (`QueueAwarePlayer`), böylece geçişler bildirim intent'i yerine native oturum üzerinden yapılıyor. Karıştır/tekrar da native duruma getirildi |
 | `1.5.1` | Paket kimliği `com.sametify.app` oldu ve tüm APK'lar tek bir **Sametify** anahtarıyla imzalanmaya başladı — CI her çalıştırmada yeni debug anahtarı ürettiği için sürümler üst üste kurulamiyordu |
@@ -28,6 +29,37 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 | `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.5.4 neler değişti?
+
+Ekran kapalıyken çalmanın ~30 sn'de kesilmesine karşı tek bir neden daha denemek yerine aynı
+arıza zincirinin beş halkası birden kapatıldı; kalan belirsizlik ölçülebilir hale getirildi.
+
+- **Kilitler artık servis tutuyor (`PlaybackWakeLocks`).** ExoPlayer'ın kendi wake/Wi-Fi
+  kilitleri durum makinesine bağlı: `STATE_IDLE` ve `STATE_ENDED` anında **bırakılıyor** — yani
+  tam şarkı geçişi ve sıradaki URL'nin çözümlendiği pencerede. Ekran kapalıyken radyo o
+  pencerede uyuyorsa bir sonraki şarkı hiç başlamıyor. Yeni kilitler `playWhenReady` izini
+  sürüyor: kullanıcı müzik istediği sürece (şarkılar arasında da) CPU ve Wi-Fi uyanık kalıyor,
+  duraklatılınca bırakılıyor. En fazla 6 saat, sızıntıya karşı tavanlı.
+- **Tampon 60-300 sn** (öncesi 30-120 sn) ve `prioritizeTimeOverSize`: ekran karardığında
+  ağ birkaç saniye throttle edilse bile çalan ses zaten indirilmiş oluyor. ~5 dk audio ≈ birkaç MB.
+- **HTTP okuma timeout'u 60 sn** (öncesi tam 30 sn) ve bağlanma 20 sn. "30 sn sonra kesiliyor"
+  tarifinin `readTimeout = 30_000` ile birebir çakışması tesadüf değil: arka planda yavaşlayan
+  bir okuma tam o anda ölü hata olarak raporlanıyordu.
+- **Backoff'lu yeniden deneme:** eskiden parça başına **tek** deneme vardı ve yeniden
+  çözümlenen URL daha birkaç saniye önce ölmüş olan ağdan alınıyordu. Artık oynatım hatasında
+  4 deneme (2-4-8-16 sn bekleyerek), URL çözümleme hatasında 3 deneme, erken biten gövdede
+  2 deneme; şarkı `STATE_READY` olduğunda bütçe sıfırlanıyor.
+- **Sessiz durma bekçisi:** güç yönetimi hata üretmeden durdurabiliyor (odak sessizce
+  geri alınıyor, oynatıcı `IDLE`'da kalıyor ya da `BUFFERING`'de takılıyor). 10 sn'de bir
+  yoklama ve eşikler: 60 sn bastırılmış odaksa odak yeniden isteniyor, 20 sn `IDLE`'da
+  bekliyorsa şarkı yeniden yükleniyor (kaynak yoksa controller'dan taze URL isteniyor), ~90 sn
+  `BUFFERING`'de takılıysa URL tazelenip kaldığı yerden yükleniyor. Normal geçişler ve kısa
+  tamponlamalar eşikleri aşamadığı için bekçi oynatıcıya dokunmuyor.
+- **Telemetri:** `PlaybackLog` aynı `filesDir/crash.log` dosyasına yazıyor, yani **Ayarlar →
+  Tanılama → Hata kaydını kopyala** artık çökme yığınıyla birlikte oynatıcı izini de veriyor:
+  Media3 hata kodu (`errorCodeName`), çalan/buffered saniyeler, deneme numarası,
+  `keepAwake cpu=… wifi=…`, `playWhenReady` değişim sebebi ve servis ölüm satırları.
 
 ### 1.5.3 neler değişti?
 
@@ -328,7 +360,7 @@ Hazır APK'yı [Releases](https://github.com/abdulsamet-kasal/spot/releases) say
 telefona kurabilirsiniz (Android 8.0+).
 
 ```powershell
-adb install -r Sametify-1.5.3.apk
+adb install -r Sametify-1.5.4.apk
 adb shell am start -n com.sametify.app/com.example.spoyt.MainActivity
 ```
 
@@ -398,12 +430,14 @@ native/
             │       ├── NewPipeDownloader.kt # OkHttp tabanlı NewPipe Downloader
             │       └── YoutubeSource.kt     # tüm NewPipe kullanımı tek sınıfta
             ├── player/
-            │   ├── PlayerHolder.kt          # ExoPlayer + HTTP katmanı + kuyruk
-            │   ├── PlaybackController.kt    # tembel akış çözümleme + yeniden deneme
+            │   ├── PlayerHolder.kt          # ExoPlayer + HTTP katmanı + kuyruk + durma bekçisi
+            │   ├── PlaybackController.kt    # tembel akış çözümleme + backoff'lu yeniden deneme
             │   ├── PlaybackEvents.kt        # kullanıcıya gösterilecek mesajlar
+            │   ├── PlaybackLog.kt           # crash.log'a oynatıcı izi (teşhis için)
+            │   ├── PlaybackWakeLocks.kt     # playWhenReady boyunca CPU + Wi-Fi uyanık
             │   ├── QueueAwarePlayer.kt      # kuyruğu native Media3 komutu olarak duyurur
             │   ├── SpoytNotificationProvider.kt # medya bildirimi + karıştır/tekrar butonları
-            │   └── MusicPlaybackService.kt  # MediaSessionService (bildirim)
+            │   └── MusicPlaybackService.kt  # MediaSessionService (bildirim + keep-awake)
             ├── download/
             │   ├── DownloadWorker.kt        # WorkManager indirme işçisi (ilerleme + retry)
             │   └── Downloads.kt             # kuyruğa alma / silme / ilerleme
@@ -425,6 +459,11 @@ native/
   (`Bu şarkı şu anda oynatılamıyor.`, `Arama sırasında bir sorun oluştu.`, ...).
 - Akış çözümlenemezse oynatıcı bunu bildirir; bir sonraki şarkıya geçilebilir.
 - Ağ hatası çalışma zamanında istisna üretmez — arayüz durumu ve Snackbar üzerinden bildirilir.
+- **Arka planda çalma kesilirse:** Ayarlar → Tanılama → **Hata kaydını kopyala** artık çökme
+  yığınını ve oynatıcı izini birlikte verir (`errorCodeName`, buffered saniye, deneme sayısı,
+  `keepAwake cpu=… wifi=…`, `playWhenReady` değişim sebebi, servis ölüm satırı). İzde
+  `service destroyed` / `service stopped: task removed` varsa sorun uygulamada değil ROM'un
+  süreç kill'indedir; OEM "otomatik başlatma / arka planda çalıştırma" izinleri verilmeli.
 
 ---
 

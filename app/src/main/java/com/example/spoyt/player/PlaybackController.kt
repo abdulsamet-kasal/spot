@@ -71,9 +71,16 @@ class PlaybackController(
         PlayerHolder.onSourceMissing = { track ->
             scope.launch { loadAndPlay(track, forceRefresh = false) }
         }
-        // Expired URL or CDN failure: refresh the URL once and re-attach.
-        PlayerHolder.onPlaybackFailed = { track ->
-            scope.launch { loadAndPlay(track, forceRefresh = true) }
+        // Stream failed (expired URL, CDN stall, screen-off network throttling): wait the stall
+        // out, then re-resolve. Growing delays because a throttled background network usually
+        // recovers within seconds, while an immediate retry hits the same dead link.
+        PlayerHolder.onPlaybackFailed = { track, attempt ->
+            scope.launch {
+                val waitMs = RETRY_BACKOFF_BASE_MS * (1L shl ((attempt - 1).coerceAtMost(3)))
+                PlaybackLog.line("retry ${track.videoId} deneme=$attempt ${waitMs / 1000}s sonra")
+                delay(waitMs)
+                loadAndPlay(track, forceRefresh = true)
+            }
         }
     }
 
@@ -144,13 +151,25 @@ class PlaybackController(
      */
     private suspend fun loadAndPlay(track: TrackEntity, forceRefresh: Boolean) {
         ensurePlayer()
-        val ok = prepare(track, forceRefresh)
+        var ok = prepare(track, forceRefresh)
+        // When playback stalls in the background the URL lookup rides on the same dead network,
+        // so one failed lookup used to end the song. Retry it a couple of times while the user
+        // is still on this track.
+        var lookupTry = 1
+        while (!ok && lookupTry < STREAM_LOOKUP_ATTEMPTS) {
+            if (PlayerHolder.currentTrackState.value?.videoId != track.videoId) return
+            delay(STREAM_LOOKUP_BACKOFF_MS * lookupTry)
+            ensurePlayer()
+            ok = prepare(track, forceRefresh = true)
+            lookupTry++
+        }
         PlayerHolder.onResolutionFinished(track.videoId)
 
         if (!ok) {
             if (PlayerHolder.currentTrackState.value?.videoId == track.videoId) {
                 PlayerHolder.clearLoading()
             }
+            PlaybackLog.line("unplayable ${track.videoId} (${track.title}) - URL cozulemedi")
             PlaybackEvents.post("Bu şarkı şu anda oynatılamıyor. Başka bir şarkı deneyin.")
             return
         }
@@ -382,5 +401,14 @@ class PlaybackController(
 
         /** Refreshing costs network calls per seed, so results are reused for a few hours. */
         private const val RECOMMENDATION_TTL_MS = 3L * 60 * 60 * 1000
+
+        /** Growing wait between automatic playback retries (attempt-1 doubles it, capped). */
+        private const val RETRY_BACKOFF_BASE_MS = 2_000L
+
+        /** How often a stream URL lookup may fail before the track counts as unplayable. */
+        private const val STREAM_LOOKUP_ATTEMPTS = 3
+
+        /** Base wait between URL lookups, multiplied by the attempt number. */
+        private const val STREAM_LOOKUP_BACKOFF_MS = 2_000L
     }
 }

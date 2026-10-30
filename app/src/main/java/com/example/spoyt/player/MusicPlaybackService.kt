@@ -29,6 +29,9 @@ class MusicPlaybackService : MediaSessionService() {
 
     private var session: MediaSession? = null
 
+    /** CPU + Wi-Fi keep-awake while the user wants music, including between tracks. */
+    private var wakeLocks: PlaybackWakeLocks? = null
+
     /** Authorizes and handles the custom shuffle/repeat commands; skipping is a player command. */
     private val sessionCallback = object : MediaSession.Callback {
         override fun onConnect(
@@ -95,6 +98,13 @@ class MusicPlaybackService : MediaSessionService() {
                         SpoytWidgetProvider.updateAll(applicationContext)
                     }
 
+                    override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                        // playWhenReady is what the user asked for; between tracks the player is
+                        // not "playing" yet ExoPlayer has already dropped its own wake locks.
+                        wakeLocks?.setNeeded(playWhenReady)
+                        SpoytWidgetProvider.updateAll(applicationContext)
+                    }
+
                     override fun onMediaItemTransition(
                         mediaItem: androidx.media3.common.MediaItem?,
                         reason: Int
@@ -103,8 +113,14 @@ class MusicPlaybackService : MediaSessionService() {
                     }
                 }
             )
+            // Keep the CPU and Wi-Fi radio awake for as long as music is wanted: without them the
+            // stream buffer runs dry ~30 s after the screen turns off.
+            wakeLocks = PlaybackWakeLocks(applicationContext).apply {
+                setNeeded(PlayerHolder.engine.playWhenReady)
+            }
         } catch (t: Throwable) {
             // A broken media session must not take the whole app down.
+            PlaybackLog.line("service onCreate failed: ${t.javaClass.simpleName} ${t.message}")
             PlaybackEvents.post("Oynatıcı başlatılamadı. Lütfen uygulamayı yeniden açın.")
             stopSelf()
         }
@@ -135,13 +151,17 @@ class MusicPlaybackService : MediaSessionService() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = session?.player
         if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
+            PlaybackLog.line("service stopped: task removed")
             stopSelf()
         }
     }
 
     override fun onDestroy() {
         // Release the session first; PlayerHolder owns the ExoPlayer lifecycle and releases it.
+        PlaybackLog.line("service destroyed (playing=${runCatching { PlayerHolder.engine.isPlaying }.getOrDefault(false)})")
         PlayerHolder.onTransportControlsChanged = null
+        wakeLocks?.release()
+        wakeLocks = null
         runCatching { session?.release() }
         session = null
         PlayerHolder.release()
