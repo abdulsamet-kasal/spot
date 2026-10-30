@@ -11,6 +11,8 @@
     <!-- WAKE_MODE_NETWORK also holds a Wi-Fi lock, and WifiManager.createWifiLock() requires
          ACCESS_WIFI_STATE; without it the radio sleeps on screen-off and the stream stalls. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- ACCESS_WIFI_STATE would otherwise imply Wi-Fi hardware as a requirement. -->
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
     <!-- Lets the settings screen ask the user to exempt Spoyt from battery optimization,
          so aggressive OEM power savers do not kill background playback. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
