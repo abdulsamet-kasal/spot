@@ -4,6 +4,7 @@ import com.example.spoyt.data.local.entities.TrackEntity
 import com.example.spoyt.data.local.repositories.DownloadRepository
 import com.example.spoyt.data.local.repositories.HistoryRepository
 import com.example.spoyt.data.local.repositories.TrackRepository
+import com.example.spoyt.data.prefs.AppPrefs
 import com.example.spoyt.data.remote.YoutubeSource
 import com.example.spoyt.di.AppContainer
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -365,6 +366,50 @@ class PlaybackController(
         }
     }
 
+    /**
+     * Auto-resume after the ROM stopped the media service mid-song (vivo-style power
+     * management: `service destroyed (playing=true)` with no player error at all). The
+     * restarted service calls this on the system's null-intent restart, so music comes back
+     * by itself instead of waiting for the user to reopen the app.
+     *
+     * Budgeted through [AppPrefs.claimRevive]: a power manager that keeps fighting the
+     * service must not turn the kill/restart ping-pong into an endless loop that drains
+     * the battery (and the user's patience).
+     */
+    suspend fun revivePlayback(): Boolean {
+        val snapshot = runCatching { AppPrefs.loadPlaybackSnapshot() }.getOrNull() ?: return false
+        if (!snapshot.playWhenReady || snapshot.videoIds.isEmpty()) return false
+        // Resuming a session from yesterday is more surprising than helpful: only a fresh
+        // stop is worth an automatic revival.
+        val stale = System.currentTimeMillis() - snapshot.savedAt > REVIVE_SNAPSHOT_MAX_AGE_MS
+        if (stale || !AppPrefs.claimRevive(REVIVE_LIMIT, REVIVE_WINDOW_MS)) {
+            PlaybackLog.line("revive skipped (stale=$stale veya butce tukendi)")
+            return false
+        }
+        val tracks = withContext(Dispatchers.IO) {
+            runCatching { snapshot.videoIds.mapNotNull { trackRepository.getTrack(it) } }
+                .getOrDefault(emptyList())
+        }
+        if (tracks.isEmpty()) {
+            PlaybackLog.line("revive skipped: kuyruk bos veya temizlenmis")
+            return false
+        }
+        PlaybackLog.line(
+            "revive: ${tracks.size} parca index=${snapshot.index} pos=${snapshot.positionMs / 1000}s"
+        )
+        val ok = play(tracks, snapshot.index)
+        if (ok) {
+            if (snapshot.positionMs > 0) PlayerHolder.seekTo(snapshot.positionMs)
+            PlaybackEvents.post("Arka plan kesintisinden devam ediliyor.")
+        }
+        return ok
+    }
+
+    /** Fire-and-forget wrapper used by the service's system-restart path ([MusicPlaybackService]). */
+    fun revivePlaybackAsync() {
+        scope.launch { revivePlayback() }
+    }
+
     /** Toggles the liked flag for [track] and returns the new value. */
     suspend fun toggleLike(track: TrackEntity): Boolean {
         // Read the current value from Room instead of trusting the caller's (possibly stale)
@@ -386,6 +431,17 @@ class PlaybackController(
     companion object {
         /** How many following tracks to try when the selected one cannot be resolved. */
         private const val MAX_FALLBACK_TRACKS = 3
+
+        /**
+         * Auto-revive budget: how many automatic resumes a rolling window allows. A vivo-style
+         * power manager that stops the service every minute must not turn the revive path
+         * into a battery-draining restart loop.
+         */
+        private const val REVIVE_LIMIT = 4
+        private const val REVIVE_WINDOW_MS = 30L * 60 * 1000
+
+        /** A snapshot from a previous listen is not auto-resumed; only a fresh stop is. */
+        private const val REVIVE_SNAPSHOT_MAX_AGE_MS = 8L * 60 * 60 * 1000
 
         /** How many upcoming tracks to resolve in the background while one plays. */
         private const val PREFETCH_TRACKS = 2

@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.5.4` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.5.5` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,6 +15,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.5.5` | Vivo/OriginOS tarzı agresif ROM'lar oynatma sürerken medya servisini sonlandırıyor ve müzik bir daha geri gelmiyordu — çalma durumu (`kuyruk + index + pozisyon + playWhenReady`) artık periyodik olarak diske yazılıyor (`PlaybackSnapshot`), sistem servisi yeniden başlattığında (`START_STICKY` + null intent) aynı parçadan ve aynı saniyeden otomatik devam; sonsuz yeniden başlatma döngüsüne karşı pencereli bütçe (30 dk'da 4 deneme, 8 saatlik tazelik sınırı) |
 | `1.5.4` | Ekran kapalıyken çalmanın kesilmesine karşı **katmanlı** çözüm: servis kendi CPU + Wi-Fi kilitlerini `playWhenReady` boyunca tutuyor (`PlaybackWakeLocks`), tampon 60-300 sn'ye çıkarıldı, HTTP okuma timeout'u 60 sn, tek atımlık yeniden deneme yerine backoff'lu 4 deneme ve bir "sessiz durma" bekçisi; tüm oynatıcı olayları artık Ayarlar → Tanılama üzerinden kopyalanabiliyor |
 | `1.5.3` | Ekran kapalıyken ~30 sn içinde akışın kesilmesi: `C.WAKE_MODE_NETWORK` Wi-Fi kilidi için gereken `ACCESS_WIFI_STATE` izni hiç bildirilmemişti, hata da sessizce yutuluyordu — kilit artık gerçekten alınıyor ve Ayarlar pil istisnasının güncel durumunu gösteriyor |
 | `1.5.2` | Kilit ekranı / sistem medya kartında **sonraki-önceki butonu gri** sorunu giderildi: kuyruk artık Media3'e standart oynatıcı komutları olarak tanıtılıyor (`QueueAwarePlayer`), böylece geçişler bildirim intent'i yerine native oturum üzerinden yapılıyor. Karıştır/tekrar da native duruma getirildi |
@@ -29,6 +30,30 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 | `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.5.5 neler değişti?
+
+Bu sürümün konusu **servis ölümünden sonra kendine gelme**: tanılama kaydında vivo'nun
+oynatma sürerken servisi hata olmadan sonlandırdığı görüldü (`service destroyed
+(playing=true)`); kuyruk yalnız bellekte yaşadığı için müzik bir daha dönmüyordu.
+
+- **Kayıt altına alma:** çalma durumu (kuyruk, index, pozisyon, `playWhenReady`) artık
+  hem oynatıcı bekçisinde 10 saniyede bir, hem şarkı/duraklatma geçişlerinde hem de
+  servisin `onDestroy`'ünde diske yazılıyor (`AppPrefs.savePlaybackSnapshot`).
+  `commit()` kullanılır: proses aniden öldürüldüğünde `apply()` yazarları diske
+  zamanında ulaşmayabilir.
+- **Otomatik devam:** sistem servisi kendisi yeniden başlattığında (intentsiz
+  `START_STICKY` restart) `MusicPlaybackService` null intent'i yakalayıp kalıcı
+  snapshot'tan kuyruğu kurar ve son pozisyonla devam eder. Kayıt yalnızca **sistem yeniden başlatmasında** çalışır: kullanıcı uygulamayı elle açıp
+  yeni bir şarkı oynatırsa onun seçimi kazanır.
+- **Döngü koruması:** ROM servisi sürekli öldürüyorsa sonsuz öldür-devam ping-pongunun
+  batarya boşaltmaması için 30 dakikalık pencerede en fazla 4 otomatik devam
+  (`AppPrefs.claimRevive`) ve 8 saatten eski oturumun otomatik geri gelmemesi var.
+- **Asıl kırıcı koddan gelmiyordu:** log'ta `keepAwake cpu=true wifi=true` görüldü;
+  yani v1.5.4'ün wake/Wi-Fi kilitleri sorunsuz çalışıyordu ve öldüren taraf ROM'un
+  güç yönetimi. Cihaz tarafında önerilen ayarlar: vivo Ayarlar → Uygulamalar →
+  Sametify → **Otomatik başlatma**, Pil → **arka plan güç yönetimi** istisnası ve son
+  kullanılanlar ekranında uygulama kartını kilitlemek.
 
 ### 1.5.4 neler değişti?
 
@@ -360,7 +385,7 @@ Hazır APK'yı [Releases](https://github.com/abdulsamet-kasal/spot/releases) say
 telefona kurabilirsiniz (Android 8.0+).
 
 ```powershell
-adb install -r Sametify-1.5.4.apk
+adb install -r Sametify-1.5.5.apk
 adb shell am start -n com.sametify.app/com.example.spoyt.MainActivity
 ```
 

@@ -1,5 +1,6 @@
 package com.example.spoyt.player
 
+import android.app.Service
 import android.content.Intent
 import android.os.Bundle
 import androidx.media3.session.CommandButton
@@ -7,6 +8,8 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
+import com.example.spoyt.data.prefs.AppPrefs
+import com.example.spoyt.di.AppContainer
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 
@@ -102,6 +105,7 @@ class MusicPlaybackService : MediaSessionService() {
                         // playWhenReady is what the user asked for; between tracks the player is
                         // not "playing" yet ExoPlayer has already dropped its own wake locks.
                         wakeLocks?.setNeeded(playWhenReady)
+                        persistSnapshot()
                         SpoytWidgetProvider.updateAll(applicationContext)
                     }
 
@@ -109,6 +113,9 @@ class MusicPlaybackService : MediaSessionService() {
                         mediaItem: androidx.media3.common.MediaItem?,
                         reason: Int
                     ) {
+                        // Track changes can happen right before the next watchdog heartbeat;
+                        // persisting here keeps queue index/position fresh for a revive.
+                        persistSnapshot()
                         SpoytWidgetProvider.updateAll(applicationContext)
                     }
                 }
@@ -127,6 +134,16 @@ class MusicPlaybackService : MediaSessionService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // A null intent means the system restarted the sticky service after the ROM stopped
+        // it mid-song (vivo's power manager stops the service while playing=true with no
+        // player error at all). Rebuild the engine and auto-resume the persisted snapshot so
+        // music comes back by itself instead of waiting for the user to reopen the app.
+        if (intent == null) {
+            PlaybackLog.line("service restarted by system (intent=null) -> auto-resume")
+            runCatching { PlayerHolder.init(applicationContext) }
+            AppContainer.playback.revivePlaybackAsync()
+            return Service.START_STICKY
+        }
         // Transport buttons from the notification come back as service intents.
         when (intent?.action) {
             ACTION_MEDIA_PREV -> PlayerHolder.playPrevious()
@@ -157,6 +174,16 @@ class MusicPlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        // Save the live state BEFORE releasing the engine: a ROM that stops the service
+        // mid-song must leave behind a resumable snapshot. A paused session is cleared so a
+        // later task-removal/restart never resurrects music the user deliberately stopped.
+        val live = runCatching { PlayerHolder.snapshot() }.getOrNull()
+        if (live != null && live.playWhenReady && live.videoIds.isNotEmpty()) {
+            AppPrefs.savePlaybackSnapshot(live.videoIds, live.index, live.positionMs, true)
+            PlaybackLog.line("snapshot saved (pos=${live.positionMs / 1000}ms index=${live.index})")
+        } else {
+            AppPrefs.clearPlaybackSnapshot()
+        }
         // Release the session first; PlayerHolder owns the ExoPlayer lifecycle and releases it.
         PlaybackLog.line("service destroyed (playing=${runCatching { PlayerHolder.engine.isPlaying }.getOrDefault(false)})")
         PlayerHolder.onTransportControlsChanged = null
@@ -178,6 +205,14 @@ class MusicPlaybackService : MediaSessionService() {
                     repeatMode = PlayerHolder.repeatModeState.value
                 )
             )
+        }
+    }
+
+    /** Persists the resumable playback state (called on the main thread from player callbacks). */
+    private fun persistSnapshot() {
+        val live = runCatching { PlayerHolder.snapshot() }.getOrNull() ?: return
+        if (live.videoIds.isNotEmpty()) {
+            AppPrefs.savePlaybackSnapshot(live.videoIds, live.index, live.positionMs, live.playWhenReady)
         }
     }
 

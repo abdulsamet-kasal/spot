@@ -18,6 +18,7 @@ import androidx.media3.datasource.TransferListener
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.example.spoyt.data.local.entities.TrackEntity
+import com.example.spoyt.data.prefs.AppPrefs
 import com.example.spoyt.data.remote.ResolvedStream
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -187,6 +188,21 @@ object PlayerHolder {
         override fun run() {
             val p = exoPlayer ?: return
             mainHandler.postDelayed(this, WATCHDOG_INTERVAL_MS)
+            // Heartbeat: persist where in the queue we are while the user wants music. An
+            // aggressive ROM can stop the media service mid-song with no error at all (vivo's
+            // power manager, verified via `service destroyed (playing=true)` in crash.log);
+            // this snapshot is what the restarted service resumes from. AppPrefs saves with
+            // commit() because a process kill never flushes pending apply() writes.
+            runCatching {
+                _currentTrack.value?.let { track ->
+                    AppPrefs.savePlaybackSnapshot(
+                        videoIds = _queue.value.map { it.videoId },
+                        index = _currentIndex.value,
+                        positionMs = p.currentPosition.coerceAtLeast(0L),
+                        playWhenReady = p.playWhenReady
+                    )
+                }
+            }
             val track = _currentTrack.value
             if (p.playWhenReady && !p.isPlaying && track != null) {
                 stalledTicks++
@@ -245,6 +261,22 @@ object PlayerHolder {
     /** Total duration in milliseconds, or 0 when unknown. */
     val durationMs: Long
         get() = exoPlayer?.duration?.takeIf { it > 0 } ?: 0L
+
+    /**
+     * What is playing right now, for the resume snapshot. Must be called on the main thread:
+     * ExoPlayer is thread-affine and rejects reads from a worker.
+     */
+    fun snapshot(): LivePlayback? {
+        val p = exoPlayer ?: return null
+        val queue = _queue.value
+        if (queue.isEmpty()) return null
+        return LivePlayback(
+            videoIds = queue.map { it.videoId },
+            index = _currentIndex.value.coerceIn(0, queue.lastIndex),
+            positionMs = p.currentPosition.coerceAtLeast(0L),
+            playWhenReady = p.playWhenReady
+        )
+    }
 
     fun init(context: Context) {
         if (exoPlayer != null) return
@@ -760,6 +792,18 @@ object PlayerHolder {
         }
     }
 }
+
+/**
+ * Flat snapshot of the live playback state (queue ids, position, wanted-play state).
+ * Used by [PlayerHolder.snapshot] so the media service can persist a resumable session
+ * across a ROM-initiated restart (see [AppPrefs.savePlaybackSnapshot]).
+ */
+data class LivePlayback(
+    val videoIds: List<String>,
+    val index: Int,
+    val positionMs: Long,
+    val playWhenReady: Boolean
+)
 
 /**
  * In-memory record of downloaded file paths keyed by videoId.
