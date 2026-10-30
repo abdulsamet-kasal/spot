@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.5.2` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.5.3` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,10 +15,11 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.5.3` | Ekran kapalıyken ~30 sn içinde akışın kesilmesi: `C.WAKE_MODE_NETWORK` Wi-Fi kilidi için gereken `ACCESS_WIFI_STATE` izni hiç bildirilmemişti, hata da sessizce yutuluyordu — kilit artık gerçekten alınıyor ve Ayarlar pil istisnasının güncel durumunu gösteriyor |
 | `1.5.2` | Kilit ekranı / sistem medya kartında **sonraki-önceki butonu gri** sorunu giderildi: kuyruk artık Media3'e standart oynatıcı komutları olarak tanıtılıyor (`QueueAwarePlayer`), böylece geçişler bildirim intent'i yerine native oturum üzerinden yapılıyor. Karıştır/tekrar da native duruma getirildi |
 | `1.5.1` | Paket kimliği `com.sametify.app` oldu ve tüm APK'lar tek bir **Sametify** anahtarıyla imzalanmaya başladı — CI her çalıştırmada yeni debug anahtarı ürettiği için sürümler üst üste kurulamiyordu |
 | `1.5.0` | Uygulama adı **Sametify** + yeni dalga formu logosu, sanatçı adları düzeltmesi (aramada "Bilinmeyen sanatçı"), radyo/mix yeniden çalışıyor, bildirim & kilit ekranında karıştır/tekrar butonları, çalma listesine ekle diyaloğu artık mevcut listeleri gösteriyor, kütüphane çalma listeleri sekmesiyle açılıyor, ana sayfada kişisel öneriler |
-| `1.4.3` | Arka plan düzeltmesi: ekran kapanınca Wi-Fi/CPU uykuya geçip akış ~1 dakikada duruyordu — oynatıcı artık çalarken wake lock + Wi-Fi lock tutuyor; Ayarlar'a pil optimizasyonu hariç tutma kısayolu eklendi |
+| `1.4.3` | Arka plan düzeltmesi: ekran kapanınca Wi-Fi/CPU uykuya geçip akış ~1 dakikada duruyordu — oynatıcı artık çalırken wake lock + Wi-Fi lock tutuyor (Wi-Fi kilidi ancak 1.5.3'te gerçekten alınıyor); Ayarlar'a pil optimizasyonu hariç tutma kısayolu eklendi |
 | `1.4.2` | Erken bitişin asıl kaynağı giderildi: akış/indirme isteklerinde URL'nin istemcisine uygun User-Agent (Android/iOS YouTube istemcisi akışları artık tarayıcı kimliğiyle indirilmiyor), NewPipe isteğinin kendi UA'sı ezilmiyor |
 | `1.4.1` | Yayın kararlılığı: kesilen akışta otomatik kurtarma (kaldığı yerden devam), bozuk URL'de manuel oynatmayla taze çözümleme, kilit ekranı medya kartı (önceki/duraklat/sonraki), aramada 60 sonuca kadar sayfalama |
 | `1.4.0` | Tekrar/oynatma hızı/uyku zamanlayıcısı, kuyruk düzenleme, radyo, sözler (LRCLIB), arama geçmişi, bağlantıdan oynatma, Geçmiş sekmesi, yedekle/geri yükle, Wi-Fi kısıtı, ana ekran widget'ı, uygulama kısayolları, güncelleme kontrolü, R8 + KSP + testler + CI |
@@ -27,6 +28,24 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 | `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.5.3 neler değişti?
+
+- **Asıl neden:** `p.setWakeMode(C.WAKE_MODE_NETWORK)` iki kilit tutar — CPU için partial wake
+  lock ve **Wi-Fi kilidi**. Wi-Fi kilidi `WifiManager.createWifiLock()` ister ve bu çağrı
+  `ACCESS_WIFI_STATE` izni olmadan `SecurityException` atıyor. İzin hiç bildirilmediği için
+  kilit hiç alınmadı; üstelik çağrı `runCatching { … }` içindeydi, hata sessizce kayboldu.
+  CPU uyanık kalıyordu ama ekran kapanınca Wi-Fi radyosu uyuyor, 30-120 sn'lik tampon boşalınca
+  akış duruyordu.
+- **Düzeltme:** `ACCESS_WIFI_STATE` manifest'e eklendi; wake modu artık `ExoPlayer.Builder`
+  üzerinde, oynatıcı kurulurken ayarlanıyor (sessizce yutulan bir çağrı yok).
+- **Neden şimdi hissedildi:** v1.5.1'de paket kimliği `com.sametify.app` oldu. Pil
+  optimizasyonu istisnası ve OEM "arka planda çalıştırma" izinleri **pakete göre** tutulur;
+  yeni paket bu istisnalarla doğmadı, yani Wi-Fi kilidine olan bağımlılık ilk kez görülebilir
+  hale geldi. v1.5.2'nin kendi değişiklikleri (oturum komutları) akışı etkilemiyor.
+- **Ayarlar:** "Pil optimizasyonu" satırı artık istisnanın gerçekten verilip verilmediğini
+  gösteriyor. Yeni pakete geçtikten sonra bir kez onaylayın; Xiaomi/Samsung/Huawei gibi agresif
+  tasarruf yapan ROM'larda bu, kod kadar belirleyici.
 
 ### 1.5.2 neler değişti?
 
@@ -309,7 +328,7 @@ Hazır APK'yı [Releases](https://github.com/abdulsamet-kasal/spot/releases) say
 telefona kurabilirsiniz (Android 8.0+).
 
 ```powershell
-adb install -r Sametify-1.5.2.apk
+adb install -r Sametify-1.5.3.apk
 adb shell am start -n com.sametify.app/com.example.spoyt.MainActivity
 ```
 

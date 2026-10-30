@@ -167,15 +167,15 @@ object PlayerHolder {
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
 
+            // Keep the CPU and the Wi-Fi radio awake while playing. With the screen off,
+            // Android powers the Wi-Fi radio down after a short while; the 30-120 s buffer then
+            // runs dry and playback stops in the background. The lock is set while building:
+            // a post-build setWakeMode() failure was previously swallowed, so the Wi-Fi half of
+            // WAKE_MODE_NETWORK silently did nothing.
             val p = ExoPlayer.Builder(context, mediaSourceFactory)
                 .setLoadControl(loadControl)
+                .setWakeMode(C.WAKE_MODE_NETWORK)
                 .build()
-
-            // Keep the CPU and the Wi-Fi radio awake while playing. With the screen off,
-            // Android powers Wi-Fi down after a short while; the 30-120 s buffer then runs
-            // dry and every song stopped after roughly a minute in the background.
-            // WAKE_MODE_NETWORK holds a partial wake lock plus a Wi-Fi lock while playing.
-            runCatching { p.setWakeMode(C.WAKE_MODE_NETWORK) }
 
             // Music audio focus: pause when another app takes audio, duck on interruptions.
             p.setAudioAttributes(

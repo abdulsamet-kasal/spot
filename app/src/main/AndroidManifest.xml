@@ -5,9 +5,12 @@
     <!-- Required by Media3 for background playback (Android 14+ needs FOREGROUND_SERVICE). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <!-- Keeps the CPU and Wi-Fi awake while playing (setWakeMode(C.WAKE_MODE_NETWORK)),
+    <!-- Keeps the CPU awake while playing (setWakeMode(C.WAKE_MODE_NETWORK)),
          so streaming does not stop when the screen turns off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- WAKE_MODE_NETWORK also holds a Wi-Fi lock, and WifiManager.createWifiLock() requires
+         ACCESS_WIFI_STATE; without it the radio sleeps on screen-off and the stream stalls. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- Lets the settings screen ask the user to exempt Spoyt from battery optimization,
          so aggressive OEM power savers do not kill background playback. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />

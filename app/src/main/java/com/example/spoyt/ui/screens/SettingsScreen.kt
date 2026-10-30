@@ -219,10 +219,20 @@ fun SettingsScreen(
                         }
                     )
                     Divider()
+                    // A new package (or an OEM reset) starts without the exemption, so show the
+                    // live state instead of a static hint.
+                    val powerManager = context.getSystemService(android.content.Context.POWER_SERVICE)
+                        as? android.os.PowerManager
+                    val batteryExempt =
+                        powerManager?.isIgnoringBatteryOptimizations(context.packageName) != false
                     SettingRow(
                         icon = Icons.Default.Power,
                         title = "Pil optimizasyonu",
-                        subtitle = "Ekran kapalıyken müzik kesilmesin diye Spoyt'u pil optimizasyonundan hariç tutun",
+                        subtitle = if (batteryExempt) {
+                            "Hariç tutulmuş — ekran kapalıyken çalma için gerekli"
+                        } else {
+                            "Ekran kapalıyken müzik kesilmesin: Sametify'ı pil optimizasyonundan hariç tutun"
+                        },
                         actionLabel = "Ayar",
                         onAction = { openBatteryOptimizationSettings(context) }
                     )
