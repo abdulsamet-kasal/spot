@@ -47,8 +47,8 @@ android {
         applicationId = "com.sametify.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 17
-        versionName = "1.5.6"
+        versionCode = 18
+        versionName = "1.5.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

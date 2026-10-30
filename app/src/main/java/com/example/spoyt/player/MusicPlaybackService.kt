@@ -104,11 +104,17 @@ class MusicPlaybackService : MediaSessionService() {
                     }
 
                     override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                        // playWhenReady is what the user asked for; between tracks the player is
-                        // not "playing" yet ExoPlayer has already dropped its own wake locks.
-                        wakeLocks?.setNeeded(playWhenReady)
+                        // Only the transition window (IDLE/BUFFERING with playback wanted) needs
+                        // app-owned locks; see needsKeepAwake().
+                        wakeLocks?.setNeeded(needsKeepAwake())
                         persistSnapshot()
                         SpoytWidgetProvider.updateAll(applicationContext)
+                    }
+
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        // Entering or leaving the transition window (READY at last track change,
+                        // BUFFERING on a network stall) toggles the locks accordingly.
+                        wakeLocks?.setNeeded(needsKeepAwake())
                     }
 
                     override fun onMediaItemTransition(
@@ -122,10 +128,11 @@ class MusicPlaybackService : MediaSessionService() {
                     }
                 }
             )
-            // Keep the CPU and Wi-Fi radio awake for as long as music is wanted: without them the
-            // stream buffer runs dry ~30 s after the screen turns off.
+            // CPU + Wi-Fi stay locked only for the transition window (IDLE/BUFFERING with music
+            // wanted). ExoPlayer releases its own radio lock there, and holding app locks for the
+            // whole session made vivo force-stop the process ~60 s after the screen went off.
             wakeLocks = PlaybackWakeLocks(applicationContext).apply {
-                setNeeded(PlayerHolder.engine.playWhenReady)
+                setNeeded(needsKeepAwake())
             }
         } catch (t: Throwable) {
             // A broken media session must not take the whole app down.
@@ -208,6 +215,23 @@ class MusicPlaybackService : MediaSessionService() {
         session = null
         PlayerHolder.release()
         super.onDestroy()
+    }
+
+    /**
+     * True only while the player is between streams: music is wanted but the next URL has not
+     * been fetched yet. That is exactly the window where ExoPlayer drops its own
+     * `WAKE_MODE_NETWORK` locks and a sleeping radio would stall the next track.
+     *
+     * Outside this window the locks are released. v1.5.4 held them for the entire session and
+     * vivo answered with a force-stop about a minute after screen-off (log: `keepAwake
+     * cpu=true wifi=true` → `service destroyed (playing=true)`, no restart), while v1.5.1 —
+     * which held no continuous locks — had no such stops.
+     */
+    private fun needsKeepAwake(): Boolean {
+        val engine = runCatching { PlayerHolder.engine }.getOrNull() ?: return false
+        if (!engine.playWhenReady) return false
+        return engine.playbackState == androidx.media3.common.Player.STATE_IDLE ||
+            engine.playbackState == androidx.media3.common.Player.STATE_BUFFERING
     }
 
     /** Publishing shuffle/repeat state as buttons requires rebuilding the custom layout. */

@@ -7,11 +7,14 @@ import android.os.PowerManager
 /**
  * CPU and Wi-Fi keep-awake for background playback.
  *
- * ExoPlayer's own `WAKE_MODE_NETWORK` locks follow its state machine: both are released at
- * STATE_IDLE and STATE_ENDED, which is exactly the window where a track change happens and where
- * the next stream URL is fetched over the network. With the screen off the radio can sleep inside
- * that window and the following track never starts. These locks follow `playWhenReady` instead, so
- * they are held as long as the user wants music, independent of player state.
+ * Hold scope is deliberately narrow: the locks are taken only while the player is in a
+ * transition (IDLE / BUFFERING with playback wanted) — exactly the window where ExoPlayer
+ * drops its own `WAKE_MODE_NETWORK` locks and the next stream URL is fetched. Continuous
+ * locks (v1.5.4) kept the radio alive for hours, which aggressive ROMs (vivo OriginOS) read
+ * as an abnormal battery drain and answer with a force-stop about a minute after the screen
+ * goes off — verified in the v1.5.5 log: `keepAwake cpu=true wifi=true` followed by
+ * `service destroyed (playing=true)` and no system restart. v1.5.1 held no continuous locks
+ * and had no such stops, so the app-level locks now mirror that behaviour.
  */
 @Suppress("DEPRECATION")
 class PlaybackWakeLocks(context: Context) {

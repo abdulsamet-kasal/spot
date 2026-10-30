@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.5.6` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.5.7` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,6 +15,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.5.7` | **Deney sürümü:** v1.5.1'in arka planda hiç kesilmemesi, v1.5.4'ten itibaren gelen **sürekli CPU + Wi-Fi kilitleriyle** açıklandı. Uygulama kilitleri artık yalnızca geçiş penceresinde (`playWhenReady` ve oynatıcı `IDLE`/`BUFFERING`) tutuluyor; parça çalarken (`READY`) ExoPlayer'ın kendi `WAKE_MODE_NETWORK` kilidi yeterli. Böylece vivo'nun "anormal pil tüketimi" avına hedef olma sebebi kalkıyor, geri kalan tüm düzeltmeler (snapshot, kurtarma, OriginOS kanalı) aynen kalıyor |
 | `1.5.6` | vivo log'u kesin sonucu verdi: ROM oynatmayı **force-stop** ile kapatıyor, sistem servisi asla yeniden başlatmıyor (`service destroyed (playing=true)` sonrası restart yok). Üç yeni kurtarma yolu: (1) servis durdurulduysa süreç hâlâ hayattaysa kendi kendini bütçeli yeniden başlatma denemesi, (2) kullanıcı uygulamayı yeniden açtığında 10 dakikaya kadar eski oturumun kaldığı yerden otomatik devam (kullanıcının yeni seçimi öncelikli), (3) bildirim kanalı `IMPORTANCE_LOW` → `DEFAULT` + kanal kimliği yenilendi — OriginOS kilit ekranı/medya kartı düşük önemli bildirimleri gizleyebildiğinden Origin Ada'da çalar kartı bundan etkilendi |
 | `1.5.5` | Vivo/OriginOS tarzı agresif ROM'lar oynatma sürerken medya servisini sonlandırıyor ve müzik bir daha geri gelmiyordu — çalma durumu (`kuyruk + index + pozisyon + playWhenReady`) artık periyodik olarak diske yazılıyor (`PlaybackSnapshot`), sistem servisi yeniden başlattığında (`START_STICKY` + null intent) aynı parçadan ve aynı saniyeden otomatik devam; sonsuz yeniden başlatma döngüsüne karşı pencereli bütçe (30 dk'da 4 deneme, 8 saatlik tazelik sınırı) |
 | `1.5.4` | Ekran kapalıyken çalmanın kesilmesine karşı **katmanlı** çözüm: servis kendi CPU + Wi-Fi kilitlerini `playWhenReady` boyunca tutuyor (`PlaybackWakeLocks`), tampon 60-300 sn'ye çıkarıldı, HTTP okuma timeout'u 60 sn, tek atımlık yeniden deneme yerine backoff'lu 4 deneme ve bir "sessiz durma" bekçisi; tüm oynatıcı olayları artık Ayarlar → Tanılama üzerinden kopyalanabiliyor |
@@ -31,6 +32,28 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 | `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.5.7 neler değişti?
+
+Bu sürüm bir **deney**: v1.5.1'in arka planda hiç kesilmemesi ile v1.5.4+ sürümlerin
+~60 saniyede öldürülmesi arasındaki farkın **sürekli wake lock'lar** olduğu hipotezi
+test ediliyor.
+
+- **Kilit kapsamı daraltıldı:** `PlaybackWakeLocks` artık yalnızca geçiş penceresinde
+  (`playWhenReady` açık ve oynatıcı `STATE_IDLE`/`STATE_BUFFERING`) tutuluyor. Parça
+  çalarken (`READY`) ExoPlayer kendi `WAKE_MODE_NETWORK` kilidini zaten tutuyor, yani
+  v1.5.4'teki gibi 6 saatlik kesintisiz CPU + Wi-Fi kilidi yok.
+- **Neden:** v1.5.4+ log'larında `keepAwake cpu=true wifi=true` satırını ~60 sn sonra
+  `service destroyed (playing=true)` takip ediyor ve hiç sistem restart'ı gelmiyor.
+  Bu, ROM'un "anormal pil tüketen uygulama" avına uyan bir imza; v1.5.1 bu kilitleri
+  hiç tutmadığı için aynı davranışı görmüyordu.
+- **Değişmeyenler:** snapshot + otomatik devam, force-stop kurtarma denemesi,
+  uygulama açılışında devam, OriginOS medya kartı için `IMPORTANCE_DEFAULT` kanal —
+  hepsi aynen duruyor.
+
+Beklenen sonuç: ekran kapalıyken çalma **kesilmemeli**. Kesilme yine olursa bu kez
+kanıt tersini gösterir (kilitler suçsuz) ve cihaz tarafı izinler/ROM beyaz listesi
+tek açıklama olarak kalır.
 
 ### 1.5.6 neler değişti?
 
@@ -406,7 +429,7 @@ Hazır APK'yı [Releases](https://github.com/abdulsamet-kasal/spot/releases) say
 telefona kurabilirsiniz (Android 8.0+).
 
 ```powershell
-adb install -r Sametify-1.5.6.apk
+adb install -r Sametify-1.5.7.apk
 adb shell am start -n com.sametify.app/com.example.spoyt.MainActivity
 ```
 
