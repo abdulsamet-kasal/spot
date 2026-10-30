@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar / media-card small icon: the Sametify mark as flat bars.
+     Small icons are drawn as a mask, so only alpha matters here. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,10.2 A1,1 0 0 1 5,10.2 L5,13.8 A1,1 0 0 1 3,13.8 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M7.5,7.6 A1,1 0 0 1 9.5,7.6 L9.5,16.4 A1,1 0 0 1 7.5,16.4 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,4.4 A1,1 0 0 1 14,4.4 L14,19.6 A1,1 0 0 1 12,19.6 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M16.5,7.6 A1,1 0 0 1 18.5,7.6 L18.5,16.4 A1,1 0 0 1 16.5,16.4 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M21,10.2 A1,1 0 0 1 23,10.2 L23,13.8 A1,1 0 0 1 21,13.8 Z" />
+</vector>

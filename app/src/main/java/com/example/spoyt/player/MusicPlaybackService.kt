@@ -1,10 +1,15 @@
 package com.example.spoyt.player
 
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import androidx.core.content.ContextCompat
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -27,7 +32,7 @@ import com.google.common.util.concurrent.ListenableFuture
  * previous / play-pause / next buttons). Skipping itself is native: [QueueAwarePlayer]
  * advertises the app-owned queue as standard player commands, so the system media card,
  * the lock screen and media buttons drive [PlayerHolder] through the session instead of
- * relying on app-specific commands. Only shuffle and repeat, which have no standard
+ * relying on app-specific commands. Like, shuffle and repeat, which have no standard
  * system buttons, are published as custom commands.
  */
 class MusicPlaybackService : MediaSessionService() {
@@ -37,6 +42,24 @@ class MusicPlaybackService : MediaSessionService() {
     /** CPU + Wi-Fi keep-awake while the user wants music, including between tracks. */
     private var wakeLocks: PlaybackWakeLocks? = null
 
+    /** Set when the user removes the app from recents: no snapshot, no rescue restart. */
+    private var stoppedByUser = false
+
+    /**
+     * Wired headsets, USB DACs and Bluetooth audio all raise `ACTION_AUDIO_BECOMING_NOISY`
+     * when the output disappears. Music players are expected to pause there instead of
+     * suddenly shouting out of the phone speaker.
+     */
+    private val becomingNoisyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != AudioManager.ACTION_AUDIO_BECOMING_NOISY) return
+            val playing = runCatching { PlayerHolder.engine.isPlaying }.getOrDefault(false)
+            if (!playing) return
+            PlaybackLog.line("audio output lost (headset unplugged) -> pause")
+            PlayerHolder.pause()
+        }
+    }
+
     /** Authorizes and handles the custom shuffle/repeat commands; skipping is a player command. */
     private val sessionCallback = object : MediaSession.Callback {
         override fun onConnect(
@@ -45,6 +68,7 @@ class MusicPlaybackService : MediaSessionService() {
         ): MediaSession.ConnectionResult {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
                 .buildUpon()
+                .add(SessionCommand(CUSTOM_COMMAND_LIKE, Bundle.EMPTY))
                 .add(SessionCommand(CUSTOM_COMMAND_SHUFFLE, Bundle.EMPTY))
                 .add(SessionCommand(CUSTOM_COMMAND_REPEAT, Bundle.EMPTY))
                 .build()
@@ -60,6 +84,10 @@ class MusicPlaybackService : MediaSessionService() {
             args: Bundle
         ): ListenableFuture<SessionResult> {
             return when (command.customAction) {
+                CUSTOM_COMMAND_LIKE -> {
+                    toggleCurrentLike()
+                    Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
                 CUSTOM_COMMAND_SHUFFLE -> {
                     PlayerHolder.toggleShuffle()
                     Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
@@ -89,6 +117,15 @@ class MusicPlaybackService : MediaSessionService() {
             // Shuffle and repeat buttons on the Android 13+ system media card
             // (lock screen / quick settings); skipping is already a native session command.
             applyMediaCardButtons()
+            // Pause when the wired/Bluetooth output disappears (headset unplugged).
+            runCatching {
+                ContextCompat.registerReceiver(
+                    this,
+                    becomingNoisyReceiver,
+                    IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
+                    ContextCompat.RECEIVER_NOT_EXPORTED
+                )
+            }
             // Repeat/shuffle are app-owned state, invisible to ExoPlayer: without a nudge the
             // notification would keep the old icons after a toggle.
             PlayerHolder.onTransportControlsChanged = {
@@ -158,6 +195,7 @@ class MusicPlaybackService : MediaSessionService() {
             ACTION_MEDIA_PREV -> PlayerHolder.playPrevious()
             ACTION_MEDIA_PLAY_PAUSE -> PlayerHolder.playPause()
             ACTION_MEDIA_NEXT -> PlayerHolder.playNext()
+            ACTION_MEDIA_LIKE -> toggleCurrentLike()
             ACTION_MEDIA_SHUFFLE -> PlayerHolder.toggleShuffle()
             ACTION_MEDIA_REPEAT -> PlayerHolder.cycleRepeatMode()
         }
@@ -175,11 +213,15 @@ class MusicPlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        val player = session?.player
-        if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
-            PlaybackLog.line("service stopped: task removed")
-            stopSelf()
-        }
+        // Swiping the app out of recents is an explicit "stop": music must not keep playing and
+        // the snapshot must not be revived the next time the app opens.
+        stoppedByUser = true
+        PlaybackLog.line("task removed by user -> stop playback")
+        runCatching { PlayerHolder.pause() }
+        runCatching { session?.player?.clearMediaItems() }
+        AppPrefs.clearPlaybackSnapshot()
+        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+        stopSelf()
     }
 
     override fun onDestroy() {
@@ -187,7 +229,7 @@ class MusicPlaybackService : MediaSessionService() {
         // mid-song must leave behind a resumable snapshot. A paused session is cleared so a
         // later task-removal/restart never resurrects music the user deliberately stopped.
         val live = runCatching { PlayerHolder.snapshot() }.getOrNull()
-        if (live != null && live.playWhenReady && live.videoIds.isNotEmpty()) {
+        if (!stoppedByUser && live != null && live.playWhenReady && live.videoIds.isNotEmpty()) {
             AppPrefs.savePlaybackSnapshot(live.videoIds, live.index, live.positionMs, true)
             PlaybackLog.line("snapshot saved (pos=${live.positionMs / 1000}ms index=${live.index})")
             // vivo's power manager stops the service mid-song. If it merely stopped the
@@ -208,6 +250,7 @@ class MusicPlaybackService : MediaSessionService() {
         }
         // Release the session first; PlayerHolder owns the ExoPlayer lifecycle and releases it.
         PlaybackLog.line("service destroyed (playing=${runCatching { PlayerHolder.engine.isPlaying }.getOrDefault(false)})")
+        runCatching { unregisterReceiver(becomingNoisyReceiver) }
         PlayerHolder.onTransportControlsChanged = null
         wakeLocks?.release()
         wakeLocks = null
@@ -241,10 +284,21 @@ class MusicPlaybackService : MediaSessionService() {
             s.setCustomLayout(
                 SpoytNotificationProvider.mediaCardButtons(
                     shuffling = PlayerHolder.isShuffling(),
-                    repeatMode = PlayerHolder.repeatModeState.value
+                    repeatMode = PlayerHolder.repeatModeState.value,
+                    liked = PlayerHolder.currentTrackState.value?.liked == true
                 )
             )
         }
+    }
+
+    /**
+     * Like toggle for the current track, shared by the notification action and the custom
+     * session command the system player card uses. The heart icon is republished right after
+     * the write so card and notification agree immediately.
+     */
+    private fun toggleCurrentLike() {
+        val track = PlayerHolder.currentTrackState.value ?: return
+        AppContainer.playback.toggleLikeAsync(track)
     }
 
     /** Persists the resumable playback state (called on the main thread from player callbacks). */

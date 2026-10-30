@@ -448,6 +448,23 @@ class PlaybackController(
         return newValue
     }
 
+    /**
+     * Like toggle coming from the media notification or the system player card. Fire-and-forget:
+     * the caller is a service intent and must return immediately.
+     */
+    fun toggleLikeAsync(track: TrackEntity) {
+        scope.launch {
+            val liked = runCatching { toggleLike(track) }.getOrElse {
+                PlaybackLog.line("like failed: ${it.javaClass.simpleName}")
+                return@launch
+            }
+            runCatching { PlayerHolder.applyLiked(liked) }
+            PlaybackEvents.post(
+                if (liked) "Beğenilenlere eklendi." else "Beğenilenlerden çıkarıldı."
+            )
+        }
+    }
+
     /** Removes a downloaded file's path from the in-memory cache (used when a download is deleted). */
     fun forgetDownload(videoId: String) {
         DownloadPaths.remove(videoId)

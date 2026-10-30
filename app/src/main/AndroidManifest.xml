@@ -59,6 +59,10 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
+                <!-- Legacy MediaBrowserService action: OEM system UIs (vivo OriginOS among
+                     them) use its presence to classify a package as a music app, which is what
+                     gets the app a card on the lock screen / island / player widget. -->
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
 

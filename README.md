@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.5.7` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.5.8` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,6 +15,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.5.8` | Yeni **uygulama logosu** (mint→violet ekolayzır işareti, adaptif + Android 13 temalı + monokrom katman). Medya kartına **beğen** butonu eklendi (kalp, kalıcı `liked` durumuyla senkron), bildirim küçük ikonu marka işareti oldu. **Son kullanılanlardan kaydırınca müzik artık duruyor** (snapshot temizlenir, yeniden canlanmaz). **Kulaklık/Bluetooth çıkınca müzik duraklıyor** (`ACTION_AUDIO_BECOMING_NOISY`). Manifest'e `MediaBrowserService` action'ı eklendi — ROM'ların uygulamayı "müzik uygulaması" olarak tanımasına yardım eder |
 | `1.5.7` | **Deney sürümü:** v1.5.1'in arka planda hiç kesilmemesi, v1.5.4'ten itibaren gelen **sürekli CPU + Wi-Fi kilitleriyle** açıklandı. Uygulama kilitleri artık yalnızca geçiş penceresinde (`playWhenReady` ve oynatıcı `IDLE`/`BUFFERING`) tutuluyor; parça çalarken (`READY`) ExoPlayer'ın kendi `WAKE_MODE_NETWORK` kilidi yeterli. Böylece vivo'nun "anormal pil tüketimi" avına hedef olma sebebi kalkıyor, geri kalan tüm düzeltmeler (snapshot, kurtarma, OriginOS kanalı) aynen kalıyor |
 | `1.5.6` | vivo log'u kesin sonucu verdi: ROM oynatmayı **force-stop** ile kapatıyor, sistem servisi asla yeniden başlatmıyor (`service destroyed (playing=true)` sonrası restart yok). Üç yeni kurtarma yolu: (1) servis durdurulduysa süreç hâlâ hayattaysa kendi kendini bütçeli yeniden başlatma denemesi, (2) kullanıcı uygulamayı yeniden açtığında 10 dakikaya kadar eski oturumun kaldığı yerden otomatik devam (kullanıcının yeni seçimi öncelikli), (3) bildirim kanalı `IMPORTANCE_LOW` → `DEFAULT` + kanal kimliği yenilendi — OriginOS kilit ekranı/medya kartı düşük önemli bildirimleri gizleyebildiğinden Origin Ada'da çalar kartı bundan etkilendi |
 | `1.5.5` | Vivo/OriginOS tarzı agresif ROM'lar oynatma sürerken medya servisini sonlandırıyor ve müzik bir daha geri gelmiyordu — çalma durumu (`kuyruk + index + pozisyon + playWhenReady`) artık periyodik olarak diske yazılıyor (`PlaybackSnapshot`), sistem servisi yeniden başlattığında (`START_STICKY` + null intent) aynı parçadan ve aynı saniyeden otomatik devam; sonsuz yeniden başlatma döngüsüne karşı pencereli bütçe (30 dk'da 4 deneme, 8 saatlik tazelik sınırı) |
@@ -32,6 +33,23 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 | `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.5.8 neler değişti?
+
+- **Logo:** uygulamanın artık kendine ait modern bir işareti var — beş çubuklu ekolayzır,
+  mint→violet gradyan, koyu mor-siyah zemin. Adaptif ikon (yuvarlak + kare maskeler),
+  Android 13 "temalı ikon" için monokrom katman ve bildirim/medya kartı için tek renk
+  küçük ikon aynı işaretten türetildi.
+- **Beğeni butonu:** sistem medya kartında ve bildirimde kalp butonu var; basınca şarkı
+  beğenilenlere eklenir/çıkarılır ve kalp dolu/boş olarak anında güncellenir.
+- **Son kullanılanlardan kaydırma:** uygulamayı recents'ten silmek artık "dur" demek —
+  müzik susar, bildirim kalkar ve oturum kaydı silinir (uygulamayı sonra açınca kendi
+  kendine devam etmez).
+- **Kulaklık çıkarma:** kablolu veya Bluetooth kulaklık bağlantısı kopunca oynatma
+  duraklıyor; müzik telefon hoparlöründen dışarı taşmıyor.
+- **ROM tanınması:** manifest'e `android.media.browse.MediaBrowserService` action'ı
+  eklendi. Bazı OEM arayüzleri (OriginOS dahil) bir paketi "müzik uygulaması" olarak
+  sınıflandırırken bu action'a bakıyor; kilit ekranı/ada kartı için ek şans.
 
 ### 1.5.7 neler değişti?
 
@@ -429,7 +447,7 @@ Hazır APK'yı [Releases](https://github.com/abdulsamet-kasal/spot/releases) say
 telefona kurabilirsiniz (Android 8.0+).
 
 ```powershell
-adb install -r Sametify-1.5.7.apk
+adb install -r Sametify-1.5.8.apk
 adb shell am start -n com.sametify.app/com.example.spoyt.MainActivity
 ```
 

@@ -105,7 +105,6 @@ object PlayerHolder {
 
     /** Set by [PlaybackController]: the current track has no playable source yet. */
     var onSourceMissing: ((TrackEntity) -> Unit)? = null
-
     /**
      * ExoPlayer is bound to the thread that created it (the main thread). Background
      * coroutines (stream resolution, retries) must never touch it directly, otherwise the
@@ -261,6 +260,25 @@ object PlayerHolder {
     /** Total duration in milliseconds, or 0 when unknown. */
     val durationMs: Long
         get() = exoPlayer?.duration?.takeIf { it > 0 } ?: 0L
+
+    /**
+     * Reflects a like toggled outside the UI (notification / media card) in the live queue, so
+     * the heart icon and every screen observing [currentTrackState] flip immediately instead of
+     * waiting for the next track change.
+     */
+    fun applyLiked(liked: Boolean) {
+        val queue = _queue.value
+        val index = _currentIndex.value.coerceIn(0, queue.lastIndex.coerceAtLeast(0))
+        val current = queue.getOrNull(index) ?: return
+        if (current.liked == liked) return
+        val updated = queue.toMutableList().also { it[index] = current.copy(liked = liked) }
+        _queue.value = updated
+        _currentTrack.value = updated[index]
+        // Heart icon on the media card / notification is now stale; ask the service to repaint.
+        // The caller may be an IO coroutine, while MediaSession and NotificationManager are
+        // main-thread only.
+        runOnMain { onTransportControlsChanged?.invoke() }
+    }
 
     /**
      * What is playing right now, for the resume snapshot. Must be called on the main thread:

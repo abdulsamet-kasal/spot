@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<gradient xmlns:android="http://schemas.android.com/apk/res/android"
-    android:type="linear"
-    android:startColor="#2B1145"
-    android:centerColor="#150A26"
-    android:endColor="#08070D"
-    android:angle="135" />
+<!-- Sametify launcher background: a deep indigo-to-black diagonal wash that makes the
+     mint/violet equalizer mark readable on any launcher. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:type="linear"
+        android:angle="135"
+        android:startColor="#2A1B4D"
+        android:centerColor="#120C22"
+        android:endColor="#05060A" />
+</shape>

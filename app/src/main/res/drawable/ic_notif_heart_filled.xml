@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Filled heart: the track is already in the liked library. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,20.2 C12,20.2 3.5,15.2 3.5,9.6 A4.6,4.6 0 0 1 12,6.9 A4.6,4.6 0 0 1 20.5,9.6 C20.5,15.2 12,20.2 12,20.2 Z" />
+</vector>

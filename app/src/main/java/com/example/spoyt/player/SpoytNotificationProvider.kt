@@ -20,10 +20,12 @@ import com.google.common.collect.ImmutableList
 const val ACTION_MEDIA_PREV = "com.example.spoyt.action.MEDIA_PREV"
 const val ACTION_MEDIA_PLAY_PAUSE = "com.example.spoyt.action.MEDIA_PLAY_PAUSE"
 const val ACTION_MEDIA_NEXT = "com.example.spoyt.action.MEDIA_NEXT"
+const val ACTION_MEDIA_LIKE = "com.example.spoyt.action.MEDIA_LIKE"
 const val ACTION_MEDIA_SHUFFLE = "com.example.spoyt.action.MEDIA_SHUFFLE"
 const val ACTION_MEDIA_REPEAT = "com.example.spoyt.action.MEDIA_REPEAT"
 
-/** Custom session commands for the two controls that have no standard system button. */
+/** Custom session commands for the controls that have no standard system button. */
+const val CUSTOM_COMMAND_LIKE = "spoyt.LIKE"
 const val CUSTOM_COMMAND_SHUFFLE = "spoyt.SHUFFLE"
 const val CUSTOM_COMMAND_REPEAT = "spoyt.REPEAT"
 
@@ -61,12 +63,13 @@ class SpoytNotificationProvider(private val context: Context) : MediaNotificatio
         val artist = metadata.artist?.toString().orEmpty()
         val repeatMode = PlayerHolder.repeatModeState.value
         val shuffling = PlayerHolder.isShuffling()
+        val liked = PlayerHolder.currentTrackState.value?.liked == true
 
         val style = MediaStyleNotificationHelper.MediaStyle(session)
             .setShowActionsInCompactView(0, 1, 2)
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notif_play)
+            .setSmallIcon(R.drawable.ic_stat_sametify)
             .setContentTitle(title)
             .setContentText(artist)
             .setContentIntent(session.sessionActivity)
@@ -85,6 +88,13 @@ class SpoytNotificationProvider(private val context: Context) : MediaNotificatio
             .addAction(
                 NotificationCompat.Action.Builder(
                     R.drawable.ic_notif_next, "Sonraki", serviceIntent(ACTION_MEDIA_NEXT)
+                ).build()
+            )
+            .addAction(
+                NotificationCompat.Action.Builder(
+                    if (liked) R.drawable.ic_notif_heart_filled else R.drawable.ic_notif_heart,
+                    if (liked) "Beğeniden çıkar" else "Beğen",
+                    serviceIntent(ACTION_MEDIA_LIKE)
                 ).build()
             )
             .addAction(
@@ -160,8 +170,12 @@ class SpoytNotificationProvider(private val context: Context) : MediaNotificatio
         /** [MediaNotification] id used when Media3 posts our notification. */
         const val ID = NOTIFICATION_ID
 
-        /** Custom layout (Android 13+ media card): shuffle and repeat have no system button. */
-        fun mediaCardButtons(shuffling: Boolean, repeatMode: RepeatMode): List<CommandButton> {
+        /** Custom layout (Android 13+ media card): like, shuffle and repeat have no system button. */
+        fun mediaCardButtons(
+            shuffling: Boolean,
+            repeatMode: RepeatMode,
+            liked: Boolean
+        ): List<CommandButton> {
             fun button(label: String, icon: Int, action: String) = CommandButton.Builder()
                 .setDisplayName(label)
                 .setIconResId(icon)
@@ -169,6 +183,11 @@ class SpoytNotificationProvider(private val context: Context) : MediaNotificatio
                 .build()
 
             return listOf(
+                button(
+                    if (liked) "Beğeniden çıkar" else "Beğen",
+                    if (liked) R.drawable.ic_notif_heart_filled else R.drawable.ic_notif_heart,
+                    CUSTOM_COMMAND_LIKE
+                ),
                 button(
                     if (shuffling) "Karıştırma: açık" else "Karıştırma: kapalı",
                     if (shuffling) R.drawable.ic_notif_shuffle else R.drawable.ic_notif_shuffle_off,
