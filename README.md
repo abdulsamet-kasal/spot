@@ -7,7 +7,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 > Bu uygulama tek kullanıcılı, kişisel bir projedir. Hesap/giriş, analitik, izleme (tracking),
 > API anahtarı veya reklam içermez. Spotify ile hiçbir marka bağıntısı yoktur.
 
-**Son sürüm:** `1.5.5` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
+**Son sürüm:** `1.5.6` — [sürümleri indir](https://github.com/abdulsamet-kasal/spot/releases/latest)
 
 ---
 
@@ -15,6 +15,7 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 
 | Sürüm | Not |
 | --- | --- |
+| `1.5.6` | vivo log'u kesin sonucu verdi: ROM oynatmayı **force-stop** ile kapatıyor, sistem servisi asla yeniden başlatmıyor (`service destroyed (playing=true)` sonrası restart yok). Üç yeni kurtarma yolu: (1) servis durdurulduysa süreç hâlâ hayattaysa kendi kendini bütçeli yeniden başlatma denemesi, (2) kullanıcı uygulamayı yeniden açtığında 10 dakikaya kadar eski oturumun kaldığı yerden otomatik devam (kullanıcının yeni seçimi öncelikli), (3) bildirim kanalı `IMPORTANCE_LOW` → `DEFAULT` + kanal kimliği yenilendi — OriginOS kilit ekranı/medya kartı düşük önemli bildirimleri gizleyebildiğinden Origin Ada'da çalar kartı bundan etkilendi |
 | `1.5.5` | Vivo/OriginOS tarzı agresif ROM'lar oynatma sürerken medya servisini sonlandırıyor ve müzik bir daha geri gelmiyordu — çalma durumu (`kuyruk + index + pozisyon + playWhenReady`) artık periyodik olarak diske yazılıyor (`PlaybackSnapshot`), sistem servisi yeniden başlattığında (`START_STICKY` + null intent) aynı parçadan ve aynı saniyeden otomatik devam; sonsuz yeniden başlatma döngüsüne karşı pencereli bütçe (30 dk'da 4 deneme, 8 saatlik tazelik sınırı) |
 | `1.5.4` | Ekran kapalıyken çalmanın kesilmesine karşı **katmanlı** çözüm: servis kendi CPU + Wi-Fi kilitlerini `playWhenReady` boyunca tutuyor (`PlaybackWakeLocks`), tampon 60-300 sn'ye çıkarıldı, HTTP okuma timeout'u 60 sn, tek atımlık yeniden deneme yerine backoff'lu 4 deneme ve bir "sessiz durma" bekçisi; tüm oynatıcı olayları artık Ayarlar → Tanılama üzerinden kopyalanabiliyor |
 | `1.5.3` | Ekran kapalıyken ~30 sn içinde akışın kesilmesi: `C.WAKE_MODE_NETWORK` Wi-Fi kilidi için gereken `ACCESS_WIFI_STATE` izni hiç bildirilmemişti, hata da sessizce yutuluyordu — kilit artık gerçekten alınıyor ve Ayarlar pil istisnasının güncel durumunu gösteriyor |
@@ -30,6 +31,26 @@ Kişisel kullanım için, Spotify benzeri bir Android müzik çalar. Şarkılar�
 | `1.1.1` | İlk oynatmadaki sessiz hata giderildi (ExoPlayer başlangıçta hazırlanıyor) |
 | `1.1.0` | Oynatma ve indirme hataları giderildi, arayüz baştan tasarlandı |
 | `1.0.0` | İlk sürüm: arama, oynatma, kütüphane, indirme |
+
+### 1.5.6 neler değişti?
+
+v1.5.5'in log'u kesin sonucu verdi: `service destroyed (playing=true)` satırından sonra
+**hiçbir sistem restart'ı gelmiyor** — yani vivo servisi durdurmakla kalmıyor, süreci
+force-stop ediyor. Öldürülen bir sürecin kendini geri getirmesinin yasal bir yolu yok;
+bu sürüm kalan üç rötuşu yapıyor:
+
+- **Kendi kendine kurtarma denemesi:** servis durdurulduğunda süreç hâlâ hayattaysa
+  (force-stop değil, salt servisi durdurma vaka) 1,5 sn sonra servis bütçeli tek
+  denemeye yeniden başlatılıyor ve snapshot'tan devam ediyor. 30 dk'da 4 deneme
+  penceresi ping-pongu engelliyor.
+- **Uygulamayı açınca otomatik devam:** force-stop sonrası geri dönüş tek yolu
+  kullanıcının uygulamayı açması. Son 10 dakika içinde kesilmiş ve `playWhenReady=true`
+  olan oturum, uygulama açılışında kaldığı yerden (aynı parça + saniye) devam ediyor.
+  Kullanıcı uygulamayı açıp başka şarkı seçtiyse onun seçimi kazanır.
+- **OriginOS medya kartı:** bildirim kanalı `IMPORTANCE_LOW`'tan `IMPORTANCE_DEFAULT`'a
+  çıkarıldı ve kanal kimliği yenilendi (`spoyt_playback2`) — vivo'nun kilit ekranı ve
+  kontrol merkezi çalar kartı, düşük önemli bildirimleri gizleyebiliyor; kanal yenisi
+  kurulumdan sonra abonelik ayarlarıyla birlikte yeniden oluşur.
 
 ### 1.5.5 neler değişti?
 
@@ -385,7 +406,7 @@ Hazır APK'yı [Releases](https://github.com/abdulsamet-kasal/spot/releases) say
 telefona kurabilirsiniz (Android 8.0+).
 
 ```powershell
-adb install -r Sametify-1.5.5.apk
+adb install -r Sametify-1.5.6.apk
 adb shell am start -n com.sametify.app/com.example.spoyt.MainActivity
 ```
 

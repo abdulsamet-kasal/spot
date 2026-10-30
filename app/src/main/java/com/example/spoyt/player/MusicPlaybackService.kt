@@ -3,6 +3,8 @@ package com.example.spoyt.player
 import android.app.Service
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -181,6 +183,19 @@ class MusicPlaybackService : MediaSessionService() {
         if (live != null && live.playWhenReady && live.videoIds.isNotEmpty()) {
             AppPrefs.savePlaybackSnapshot(live.videoIds, live.index, live.positionMs, true)
             PlaybackLog.line("snapshot saved (pos=${live.positionMs / 1000}ms index=${live.index})")
+            // vivo's power manager stops the service mid-song. If it merely stopped the
+            // service while the process is still alive, one delayed self-restart can bring
+            // the music back by itself. A force-stop kills the process before this ever
+            // runs — no legal way exists to resurrect it; then only the next app open can
+            // continue the session (PlaybackController.reviveAfterAppOpen). The revive
+            // budget inside claimRevive caps this rescue to a few attempts per half hour.
+            Handler(Looper.getMainLooper()).postDelayed({
+                runCatching {
+                    PlaybackLog.line("rescue: servisi yeniden baslatma denemesi")
+                    AppContainer.startPlaybackService()
+                    AppContainer.playback.reviveAfterServiceRescue()
+                }
+            }, RESCUE_RESTART_DELAY_MS)
         } else {
             AppPrefs.clearPlaybackSnapshot()
         }
@@ -225,5 +240,10 @@ class MusicPlaybackService : MediaSessionService() {
             launch,
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
         )
+    }
+
+    private companion object {
+        /** How long after the service death the self-restart rescue waits. */
+        const val RESCUE_RESTART_DELAY_MS = 1_500L
     }
 }

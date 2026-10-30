@@ -54,6 +54,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppContainer.init(applicationContext)
+        // If a ROM (vivo-style power manager) force-stopped a playing session, the
+        // snapshot survives on disk. When the user opens the app within minutes, continue
+        // where the music was cut; if the user has already picked something new, their
+        // choice wins (guarded in the controller).
+        AppContainer.playback.reviveAfterAppOpen()
         handleShortcutIntent(intent)
         setContent {
             SpoytTheme {

@@ -366,22 +366,45 @@ class PlaybackController(
         }
     }
 
+    /** Fire-and-forget wrapper used by the service's system-restart path ([MusicPlaybackService]). */
+    fun revivePlaybackAsync() {
+        scope.launch { reviveImpl(REVIVE_SNAPSHOT_MAX_AGE_MS, guardCurrentTrack = false) }
+    }
+
+    /**
+     * Continues a session the ROM cut off when the user reopens the app. Vivo-style power
+     * managers force-stop the whole process, so no service restart ever arrives; the only
+     * recovery left is the next time the user opens the app. Guarded: if the user already
+     * picked a track themselves, their choice wins.
+     */
+    fun reviveAfterAppOpen() {
+        scope.launch { reviveImpl(REVIVE_ON_OPEN_MAX_AGE_MS, guardCurrentTrack = true) }
+    }
+
+    /**
+     * Self-restart salvage: the service tried to restart itself after the ROM stopped it
+     * (the process was clearly still alive — a force-stop never reaches this point).
+     */
+    fun reviveAfterServiceRescue() {
+        scope.launch { reviveImpl(REVIVE_RESCUE_MAX_AGE_MS, guardCurrentTrack = false) }
+    }
+
     /**
      * Auto-resume after the ROM stopped the media service mid-song (vivo-style power
-     * management: `service destroyed (playing=true)` with no player error at all). The
-     * restarted service calls this on the system's null-intent restart, so music comes back
-     * by itself instead of waiting for the user to reopen the app.
+     * management: `service destroyed (playing=true)` with no player error at all). Called on
+     * a system restart, an app open or a self-restarted service, so music comes back by
+     * itself instead of waiting for the user to press play again.
      *
      * Budgeted through [AppPrefs.claimRevive]: a power manager that keeps fighting the
      * service must not turn the kill/restart ping-pong into an endless loop that drains
      * the battery (and the user's patience).
      */
-    suspend fun revivePlayback(): Boolean {
+    private suspend fun reviveImpl(maxAgeMs: Long, guardCurrentTrack: Boolean): Boolean {
         val snapshot = runCatching { AppPrefs.loadPlaybackSnapshot() }.getOrNull() ?: return false
         if (!snapshot.playWhenReady || snapshot.videoIds.isEmpty()) return false
         // Resuming a session from yesterday is more surprising than helpful: only a fresh
         // stop is worth an automatic revival.
-        val stale = System.currentTimeMillis() - snapshot.savedAt > REVIVE_SNAPSHOT_MAX_AGE_MS
+        val stale = System.currentTimeMillis() - snapshot.savedAt > maxAgeMs
         if (stale || !AppPrefs.claimRevive(REVIVE_LIMIT, REVIVE_WINDOW_MS)) {
             PlaybackLog.line("revive skipped (stale=$stale veya butce tukendi)")
             return false
@@ -394,6 +417,13 @@ class PlaybackController(
             PlaybackLog.line("revive skipped: kuyruk bos veya temizlenmis")
             return false
         }
+        // If the user's own choice is already on the player, it must win over the snapshot.
+        val expected = snapshot.videoIds.getOrNull(snapshot.index)
+        val current = PlayerHolder.currentTrackState.value
+        if (guardCurrentTrack && current != null && current.videoId != expected) {
+            PlaybackLog.line("revive skipped: kullanicinin secimi oncelikli (${current.videoId})")
+            return false
+        }
         PlaybackLog.line(
             "revive: ${tracks.size} parca index=${snapshot.index} pos=${snapshot.positionMs / 1000}s"
         )
@@ -403,11 +433,6 @@ class PlaybackController(
             PlaybackEvents.post("Arka plan kesintisinden devam ediliyor.")
         }
         return ok
-    }
-
-    /** Fire-and-forget wrapper used by the service's system-restart path ([MusicPlaybackService]). */
-    fun revivePlaybackAsync() {
-        scope.launch { revivePlayback() }
     }
 
     /** Toggles the liked flag for [track] and returns the new value. */
@@ -442,6 +467,12 @@ class PlaybackController(
 
         /** A snapshot from a previous listen is not auto-resumed; only a fresh stop is. */
         private const val REVIVE_SNAPSHOT_MAX_AGE_MS = 8L * 60 * 60 * 1000
+
+        /** Opening the app resumes only a very recent cut-off session, not an old one. */
+        private const val REVIVE_ON_OPEN_MAX_AGE_MS = 10L * 60 * 1000
+
+        /** The service's own rescue restart only makes sense minutes after the stop. */
+        private const val REVIVE_RESCUE_MAX_AGE_MS = 30L * 60 * 1000
 
         /** How many upcoming tracks to resolve in the background while one plays. */
         private const val PREFETCH_TRACKS = 2

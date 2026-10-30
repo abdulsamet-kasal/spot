@@ -28,7 +28,14 @@ const val CUSTOM_COMMAND_SHUFFLE = "spoyt.SHUFFLE"
 const val CUSTOM_COMMAND_REPEAT = "spoyt.REPEAT"
 
 private const val NOTIFICATION_ID = 2001
-private const val CHANNEL_ID = "spoyt_playback"
+
+/**
+ * Bumped from "spoyt_playback" so every installed v1.5.6+ rebuilds the channel: the old
+ * channel was IMPORTANCE_LOW, and OEM media controls (vivo OriginOS lock screen /
+ * control-center player card) tend to hide low-importance notifications, leaving the
+ * music visible only in the shade.
+ */
+private const val CHANNEL_ID = "spoyt_playback2"
 
 /**
  * Builds the media notification for the shade and the lock screen: song title, artist and
@@ -139,7 +146,10 @@ class SpoytNotificationProvider(private val context: Context) : MediaNotificatio
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Müzik çalma",
-                NotificationManager.IMPORTANCE_LOW
+                // IMPORTANCE_DEFAULT, not LOW: aggressive ROMs (vivo OriginOS) hide
+                // low-importance notifications from the lock screen and their media
+                // player card; a silent DEFAULT channel still plays no sound.
+                NotificationManager.IMPORTANCE_DEFAULT
             )
             channel.setShowBadge(false)
             manager.createNotificationChannel(channel)
